@@ -55,6 +55,7 @@ O projeto segue desenvolvimento orientado a especificação (SDD).
 
 | Onde | O quê |
 |---|---|
+| [AGENTS.md](AGENTS.md) | Instruções para agentes de código: comandos, fluxo e convenções. |
 | [docs/constituicao.md](docs/constituicao.md) | Princípios que valem para todo o projeto. |
 | [docs/adr/](docs/adr/README.md) | Decisões de arquitetura e seus motivos. |
 | [specs/001-dama-ia-gambi/spec.md](specs/001-dama-ia-gambi/spec.md) | O quê e por quê: requisitos e critérios de aceitação. |
