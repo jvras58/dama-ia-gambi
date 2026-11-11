@@ -154,8 +154,9 @@ Decidido em 2026-11-11: a calibração pela câmera falhou em seis tentativas se
 - [x] **T321** Tabuleiro jogável na página
   Tocar na peça mostra os destinos; capturas em sequência são seguidas casa a casa; lista de lances com o rótulo do juiz.
   Pronto quando: uma partida humano × Minimax é jogada no navegador do PC.
-- [ ] **T322** Conferir no telefone
+- [x] **T322** Conferir no telefone
   Pronto quando: uma partida inteira é jogada por toque no telefone, e outra contra uma LLM do Gambi.
+  Conferido pelo dono do projeto em 2026-11-11, no telefone, com o Minimax e com o `llama3.2:latest` pelo Gambi 0.7.2.
 
 ## M4 — Detecção de jogadas
 
