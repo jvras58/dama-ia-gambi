@@ -1,8 +1,11 @@
 """Funcao de avaliacao estatica, em centesimos de pedra.
 
-Considera material, avanco das pedras, controle do centro, mobilidade e pecas ameacadas.
-O resultado e sempre do ponto de vista do lado da vez. Os pesos vem da configuracao
-(`DAMA_AVALIACAO_*`).
+Considera material, avanco das pedras, controle do centro, mobilidade e pecas
+ameacadas. O resultado e sempre do ponto de vista do lado da vez. Os pesos vem da
+configuracao (`DAMA_AVALIACAO_*`).
+
+`_CENTRO` sao as casas centrais: as que ficam fora das duas linhas e colunas de
+cada borda. `_OPOSTA[d]` e o indice, em `DIRECOES`, da direcao contraria a `d`.
 """
 
 from typing import Final
@@ -21,19 +24,21 @@ from dama.regras.tabuleiro import (
 )
 from dama.regras.tipos import BRANCA, PEDRA, PRETA, VAZIA, Casa, Cor, Tabuleiro
 
-# Casas centrais: fora das duas linhas e colunas de cada borda.
 _BORDA: Final[int] = 2
 _CENTRO: Final[frozenset[Casa]] = frozenset(
     i
     for i in range(N_CASAS)
     if _BORDA <= COLUNA[i] < LADO - _BORDA and _BORDA <= LINHA[i] < LADO - _BORDA
 )
-# Para cada direcao em DIRECOES, o indice da direcao contraria.
 _OPOSTA: Final[tuple[int, ...]] = tuple(DIRECOES.index((-dl, -dc)) for dl, dc in DIRECOES)
 
 
 def _lado(tab: Tabuleiro, cor: Cor, config: Settings) -> int:
-    """Pontuacao de um lado, sem descontar a do outro."""
+    """Pontuacao de um lado, sem descontar a do outro.
+
+    Uma peca conta como ameacada quando ha um inimigo encostado numa diagonal e a
+    casa do lado oposto esta vazia.
+    """
     valor_pedra = config.avaliacao_valor_pedra
     valor_dama = config.avaliacao_valor_dama
     peso_avanco = config.avaliacao_peso_avanco
@@ -68,7 +73,6 @@ def _lado(tab: Tabuleiro, cor: Cor, config: Settings) -> int:
                     if tab[alvo] != VAZIA:
                         break
                     total += peso_mobilidade
-        # Ameacada: inimigo encostado numa diagonal e casa vazia do lado oposto.
         for d, raio in enumerate(raios):
             oposto = raios[_OPOSTA[d]]
             if raio and oposto and tab[raio[0]] * cor < 0 and tab[oposto[0]] == VAZIA:

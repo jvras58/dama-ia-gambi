@@ -25,19 +25,27 @@ type Passo = str | int | tuple[str, float] | Callable[[str], str]
 
 @dataclass
 class ServidorFalso:
+    """Hub Gambi de mentira, com respostas roteirizadas.
+
+    `pedidos` guarda tudo o que chegou, para os testes inspecionarem.
+    """
+
     roteiro: list[Passo] = field(default_factory=list)
     padrao: Passo = "LANCE: 1\nMOTIVO: lance padrao do servidor falso."
     participantes: list[str] = field(default_factory=lambda: ["ana-1", "bia-1"])
     sem_responses: bool = False
     sala: str = "ABC123"
-    pedidos: list[Json] = field(default_factory=list)  # tudo o que chegou, para inspecao
+    pedidos: list[Json] = field(default_factory=list)
+    """Tudo o que chegou, para inspecao."""
 
     def app(self) -> FastAPI:
+        """Aplicacao FastAPI com as rotas de inferencia de uma sala."""
         app = FastAPI()
         prefixo = "/rooms/{sala}/v1"
 
         @app.get(prefixo + "/models", response_model=None)
         async def modelos(sala: str) -> Json | JSONResponse:
+            """Lista os participantes da sala, no formato de modelos."""
             if sala != self.sala:
                 return JSONResponse({"error": "room not found"}, status_code=404)
             return {
@@ -50,6 +58,7 @@ class ServidorFalso:
 
         @app.post(prefixo + "/responses", response_model=None)
         async def responses(sala: str, pedido: Request) -> Json | JSONResponse:
+            """Imita a Responses API."""
             corpo = await pedido.json()
             if self.sem_responses:
                 return JSONResponse({"error": "not found"}, status_code=404)
@@ -80,6 +89,7 @@ class ServidorFalso:
 
         @app.post(prefixo + "/chat/completions", response_model=None)
         async def chat(sala: str, pedido: Request) -> Json | JSONResponse:
+            """Imita a API de Chat Completions."""
             corpo = await pedido.json()
             self.pedidos.append({"rota": "chat", **corpo})
             ultimo = corpo["messages"][-1]["content"]
@@ -103,6 +113,7 @@ class ServidorFalso:
         return app
 
     async def _proximo(self, sala: str, ultimo_pedido: str) -> str | JSONResponse:
+        """Consome o proximo passo do roteiro e devolve a resposta dele."""
         if sala != self.sala:
             return JSONResponse({"error": "room not found"}, status_code=404)
         passo = self.roteiro.pop(0) if self.roteiro else self.padrao

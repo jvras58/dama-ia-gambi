@@ -1,3 +1,5 @@
+"""Testes da funcao de avaliacao estatica."""
+
 import pytest
 
 from dama.config import obter_config
@@ -13,12 +15,14 @@ POSICOES = [
 
 
 def test_posicao_inicial_e_equilibrada() -> None:
+    """A posicao inicial vale zero para os dois lados."""
     assert avaliar(posicao_inicial(), BRANCA) == 0
     assert avaliar(posicao_inicial(), PRETA) == 0
 
 
 @pytest.mark.parametrize("pecas", POSICOES)
 def test_troca_de_lado_inverte_o_sinal(pecas: dict[str, str]) -> None:
+    """A mesma posicao vale o oposto para o adversario."""
     tab = montar(pecas)
     assert avaliar(tab, BRANCA) == -avaliar(tab, PRETA)
 
@@ -27,17 +31,20 @@ def test_troca_de_lado_inverte_o_sinal(pecas: dict[str, str]) -> None:
 def test_posicao_espelhada_tem_a_mesma_pontuacao_para_quem_joga(
     pecas: dict[str, str],
 ) -> None:
+    """Espelhar o tabuleiro e trocar as cores nao muda a nota de quem joga."""
     tab = montar(pecas)
     assert avaliar(tab, BRANCA) == avaliar(espelhar(tab), PRETA)
 
 
 def test_material_domina() -> None:
+    """Uma pedra a mais vale mais que os bonus posicionais."""
     uma_a_mais = montar({"a1": "b", "c1": "b", "h8": "p"})
     assert avaliar(uma_a_mais, BRANCA) > obter_config().avaliacao_valor_pedra // 2
     assert avaliar(uma_a_mais, PRETA) < -obter_config().avaliacao_valor_pedra // 2
 
 
 def test_dama_vale_mais_que_pedra() -> None:
+    """Trocar uma pedra por uma dama melhora a nota."""
     com_dama = avaliar(montar({"c3": "B", "h8": "p"}), BRANCA)
     com_pedra = avaliar(montar({"c3": "b", "h8": "p"}), BRANCA)
     assert (
@@ -47,6 +54,7 @@ def test_dama_vale_mais_que_pedra() -> None:
 
 
 def test_pedra_avancada_vale_mais() -> None:
+    """Uma pedra mais perto da promocao vale mais."""
     assert avaliar(montar({"a5": "b", "h8": "p"}), BRANCA) > avaliar(
         montar({"a3": "b", "h8": "p"}), BRANCA
     )

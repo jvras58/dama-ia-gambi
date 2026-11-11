@@ -184,6 +184,11 @@ A saturação separa "vazia" de "peça" e a luminância separa branca de preta, 
   - Com dois modelos diferentes no mesmo Ollama, cada troca de lado pode recarregar o modelo: cerca de 10 s por lance no trecho LLM × LLM.
   - Os modelos escolhem um número válido, mas **o motivo que escrevem costuma ser inventado** (falam em captura num lance simples). O motivo deve ser exibido como opinião do modelo, não como fato.
   - `gambi ... --no-interactive` falha na versão 0.6.0 com "Ambiguous Syntax Error"; não usar essa opção.
+- **Revalidação com o Gambi 0.7.2 (2026-11-10)**: CLI atualizada de 0.6.0 para 0.7.2. Sem mudança no nosso código: `checar-gambi` passou nos dois protocolos e `llama3.2` × Minimax(2) jogou 10 lances com 0% de fallback.
+  - O `participant join` agora exige o nome exato do modelo (`llama3.2:latest`); com `llama3.2` ele recusa a entrada.
+  - Sala sem participante responde 404 na inferência; a partida seguiu com fallback do Minimax, como previsto.
+  - O `gambi self update` baixou o binário novo mas não concluiu a troca no Windows; a troca foi feita à mão.
+  - A opção `--no-interactive`, que falhava na 0.6.0, funciona na 0.7.2: testada em `hub serve`, `room create`, `room list`, `room get` e `participant join`. Sem os argumentos obrigatórios, o comando falha com mensagem clara em vez de perguntar.
 - **Testes**: servidor falso compatível com OpenAI (FastAPI de teste) que devolve respostas roteirizadas: válida, lixo, 409, 503, lenta.
 
 ### 4.6 Orquestrador

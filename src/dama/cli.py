@@ -57,6 +57,7 @@ def _preparar_saida() -> None:
 
 
 def _nota(pontuacao: int, config: Settings) -> str:
+    """Nota de um lance para exibir: em pedras, ou 'vence'/'perde' se for forcado."""
     if pontuacao >= config.minimax_limiar_vitoria:
         return "vence"
     if pontuacao <= -config.minimax_limiar_vitoria:
@@ -65,6 +66,7 @@ def _nota(pontuacao: int, config: Settings) -> str:
 
 
 def _nao_implementado(marco: str) -> None:
+    """Avisa que o comando ainda nao existe e encerra com falha."""
     typer.echo(f"Ainda nao implementado (previsto para o marco {marco}).", err=True)
     raise typer.Exit(code=Saida.FALHA)
 
@@ -75,10 +77,8 @@ def serve() -> None:
     _nao_implementado("M3")
 
 
-# --- simular ---------------------------------------------------------------------
-
-
 def _tipo_do_lado(texto: str) -> TipoControlador | None:
+    """Tipo de controlador pedido em 'minimax:4' ou 'llm:x'; None se invalido."""
     nome = texto.partition(_SEPARADOR_DO_LADO)[0]
     return TipoControlador(nome) if nome in set(TipoControlador) else None
 
@@ -98,6 +98,7 @@ def _criar_lado(texto: str, cliente: ClienteGambi | None, config: Settings) -> C
 
 
 def _nome_do_lado(controlador: Controlador) -> str:
+    """Nome de um lado para o cabecalho da simulacao."""
     if isinstance(controlador, ControladorLLM):
         return f"LLM {controlador.modelo}"
     if isinstance(controlador, ControladorMinimax) and controlador.profundidade:
@@ -159,6 +160,10 @@ async def _simular(
     mostrar_tabuleiro: bool,
     config: Settings,
 ) -> None:
+    """Joga a partida no terminal, imprimindo cada lance e o resumo final.
+
+    A partida e gravada em `pasta` depois de cada lance.
+    """
     cliente = ClienteGambi(hub, sala, config.llm_timeout_s) if sala else None
     controladores: dict[Cor, Controlador] = {
         BRANCA: _criar_lado(brancas, cliente, config),
@@ -168,6 +173,7 @@ async def _simular(
     arquivo = pasta / f"{datetime.now():{_FORMATO_DO_ARQUIVO}}.json"
 
     def ouvinte(tipo: Evento, dados: DadosEvento) -> None:
+        """Imprime uma linha por lance jogado; ignora os outros eventos."""
         if tipo is not Evento.LANCE:
             return
         lance = cast(LanceJogadoDict, dados)
@@ -219,9 +225,6 @@ async def _simular(
         typer.echo(f"Partida salva em {arquivo}")
 
 
-# --- checar-gambi ----------------------------------------------------------------
-
-
 @app.command("checar-gambi")
 def checar_gambi(
     hub: Annotated[str | None, typer.Option(help="URL do hub Gambi")] = None,
@@ -238,6 +241,10 @@ def checar_gambi(
 
 
 async def _checar(hub: str, sala: str, config: Settings) -> bool:
+    """Lista os participantes da sala e testa cada um nos dois protocolos.
+
+    Devolve True se ao menos uma chamada de inferencia funcionou.
+    """
     cliente = ClienteGambi(hub, sala, config.llm_timeout_s)
     typer.echo(f"Hub:  {hub}\nSala: {sala}\n")
     try:

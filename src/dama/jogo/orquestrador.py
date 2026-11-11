@@ -32,6 +32,8 @@ from dama.regras.tipos import COR_DO_LADO, CORES, NOME_COR, Cor, Lado, Lance, Re
 
 
 class Estado(StrEnum):
+    """Estados da maquina de estados da partida."""
+
     PREPARANDO = "preparando"
     EM_JOGO = "em_jogo"
     AGUARDANDO_EXECUCAO = "aguardando_execucao"
@@ -40,6 +42,8 @@ class Estado(StrEnum):
 
 
 class Modo(StrEnum):
+    """Modos de jogo."""
+
     IA_X_IA = "ia_x_ia"
     ASSISTIDO = "assistido"
 
@@ -54,6 +58,8 @@ class Evento(StrEnum):
 
 
 class LanceJogadoDict(TypedDict):
+    """Forma serializavel de `LanceJogado`; tambem e o dado do evento LANCE."""
+
     numero: int
     cor: Lado
     lance: str
@@ -66,11 +72,15 @@ class LanceJogadoDict(TypedDict):
 
 
 class DadosEstado(TypedDict):
+    """Dado do evento ESTADO: o novo estado e o resultado, se a partida acabou."""
+
     estado: Estado
     resultado: Resultado | None
 
 
 class DadosLancePendente(TypedDict):
+    """Dado do evento LANCE_PENDENTE: o lance que falta executar no tabuleiro."""
+
     cor: Lado
     lance: str
     origem: Origem
@@ -78,6 +88,8 @@ class DadosLancePendente(TypedDict):
 
 
 class DadosSugestao(TypedDict):
+    """Dado do evento SUGESTAO: o lance sugerido e a nota do Minimax para ele."""
+
     lance: str
     origem: Origem
     motivo: str
@@ -99,6 +111,7 @@ def criar_analisador(
     """
 
     async def analisador(partida: Partida) -> AnalisePosicao:
+        """Analisa a posicao atual de `partida` no executor."""
         laco = asyncio.get_running_loop()
         return await laco.run_in_executor(
             executor, analisar, partida.tab, partida.vez, profundidade, tempo_s
@@ -109,17 +122,21 @@ def criar_analisador(
 
 @dataclass
 class LanceJogado:
+    """Um lance ja aplicado, com a origem e o julgamento do juiz."""
+
     numero: int
     cor: Cor
     texto: str
     origem: Origem
     motivo: str
-    rotulo: Rotulo | None  # None se o lance nao foi analisado pelo juiz
+    rotulo: Rotulo | None
+    """None se o lance nao foi analisado pelo juiz."""
     pontuacao: int
     perda: int
     registro_llm: RegistroLLMDict | None = None
 
     def para_dict(self) -> LanceJogadoDict:
+        """Converte para a forma gravada em JSON."""
         return {
             "numero": self.numero,
             "cor": NOME_COR[self.cor],
@@ -134,6 +151,7 @@ class LanceJogado:
 
     @classmethod
     def de_dict(cls, dados: LanceJogadoDict) -> Self:
+        """Reconstroi a partir da forma gravada em JSON."""
         rotulo = dados["rotulo"]
         return cls(
             numero=dados["numero"],
@@ -150,12 +168,18 @@ class LanceJogado:
 
 @dataclass
 class Orquestrador:
+    """Conduz uma partida: pede lances, aplica, julga e avisa o ouvinte.
+
+    `conselheiro` e `cor_assistida` so sao usados no modo assistido.
+    """
+
     partida: Partida
     controladores: Mapping[Cor, Controlador]
     analisador: Analisador
     modo: Modo = Modo.IA_X_IA
     simulado: bool = True
-    conselheiro: Controlador | None = None  # modo assistido: sugere lances
+    conselheiro: Controlador | None = None
+    """Modo assistido: sugere lances."""
     cor_assistida: Cor | None = None
     ouvinte: Ouvinte | None = None
     lances: list[LanceJogado] = field(default_factory=list)
@@ -164,28 +188,28 @@ class Orquestrador:
     _analise: AnalisePosicao | None = field(default=None, repr=False)
     _estado_antes_da_pausa: Estado = field(default=Estado.EM_JOGO, repr=False)
 
-    # --- Controle ------------------------------------------------------------
-
     def iniciar(self) -> None:
+        """Sai de PREPARANDO para EM_JOGO (ou ENCERRADA, se nao ha o que jogar)."""
         if self.estado is Estado.PREPARANDO:
             self._mudar_estado(Estado.ENCERRADA if self.partida.encerrada() else Estado.EM_JOGO)
 
     def pausar(self) -> None:
+        """Pausa a partida, lembrando o estado em que ela estava."""
         if self.estado in (Estado.EM_JOGO, Estado.AGUARDANDO_EXECUCAO):
             self._estado_antes_da_pausa = self.estado
             self._mudar_estado(Estado.PAUSADA)
 
     def retomar(self) -> None:
+        """Volta ao estado anterior a pausa."""
         if self.estado is Estado.PAUSADA:
             self._mudar_estado(self._estado_antes_da_pausa)
 
     def encerrar(self, empate: bool = False) -> None:
+        """Encerra a partida; com `empate=True`, registra empate por acordo."""
         if empate:
             self.partida.empate_por_acordo = True
         self.pendente = None
         self._mudar_estado(Estado.ENCERRADA)
-
-    # --- Turno ---------------------------------------------------------------
 
     async def analise_atual(self) -> AnalisePosicao:
         """Analise do juiz para a posicao da vez (calculada uma vez por posicao)."""
@@ -197,13 +221,15 @@ class Orquestrador:
         """Avanca um turno de IA. Devolve o lance aplicado, ou None se nada foi aplicado.
 
         Nao faz nada se a partida nao esta em jogo ou se o lado da vez e humano.
+
+        O estado e conferido de novo depois da escolha, porque a partida pode ter sido
+        pausada ou encerrada enquanto o controlador pensava.
         """
         if self.estado is not Estado.EM_JOGO:
             return None
         controlador = self.controladores[self.partida.vez]
         analise = await self.analise_atual()
         decisao = await controlador.escolher(self.partida, analise)
-        # O estado pode ter mudado (pausa, encerramento) enquanto o controlador pensava.
         if decisao is None or not self._em_jogo():
             return None
         if self.simulado:
@@ -278,6 +304,7 @@ class Orquestrador:
             jogados += 1
 
     def desfazer(self) -> None:
+        """Desfaz o ultimo lance e volta a EM_JOGO."""
         self.partida.desfazer()
         if self.lances:
             self.lances.pop()
@@ -285,9 +312,8 @@ class Orquestrador:
         self._analise = None
         self._mudar_estado(Estado.EM_JOGO)
 
-    # --- Consulta ------------------------------------------------------------
-
     def resumo_do_juiz(self) -> dict[Lado, ResumoLado]:
+        """Contagem de rotulos e perda media de cada lado."""
         return resumir(
             Julgamento(x.cor, x.rotulo, x.perda) for x in self.lances if x.rotulo is not None
         )
@@ -303,12 +329,15 @@ class Orquestrador:
             taxas[NOME_COR[cor]] = falhas / len(consultas) if consultas else 0.0
         return taxas
 
-    # --- Interno -------------------------------------------------------------
-
     def _em_jogo(self) -> bool:
+        """Diz se a partida esta em jogo neste instante."""
         return self.estado is Estado.EM_JOGO
 
     def _aplicar(self, lance: Lance, decisao: Decisao | None) -> LanceJogado:
+        """Aplica o lance, registra com o julgamento do juiz e avisa o ouvinte.
+
+        `decisao` e None quando o lance veio de um humano.
+        """
         analise = self._analise
         item = analise.de(lance) if analise else None
         cor = self.partida.vez
@@ -332,10 +361,12 @@ class Orquestrador:
         return jogado
 
     def _mudar_estado(self, novo: Estado) -> None:
+        """Troca o estado e avisa o ouvinte, se houve mudanca."""
         if novo is not self.estado:
             self.estado = novo
             self._emitir(Evento.ESTADO, {"estado": novo, "resultado": self.partida.resultado()})
 
     def _emitir(self, tipo: Evento, dados: DadosEvento) -> None:
+        """Entrega um evento ao ouvinte, se houver um."""
         if self.ouvinte is not None:
             self.ouvinte(tipo, dados)

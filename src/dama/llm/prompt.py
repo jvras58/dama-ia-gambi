@@ -1,7 +1,11 @@
 """Montagem do prompt enviado a LLM.
 
-A LLM nunca inventa um lance: recebe a lista numerada de lances legais e responde com o numero.
-A analise do Minimax so entra no prompt quando `analise` e passada (modo assistido).
+A LLM nunca inventa um lance: recebe a lista numerada de lances legais e responde
+com o numero. A analise do Minimax so entra no prompt quando `analise` e passada
+(modo assistido).
+
+Os textos `INSTRUCOES` e `INSTRUCOES_ANALISE` sao conteudo, nao parametros: ficam
+aqui, junto de quem os monta e do parser que le a resposta.
 """
 
 from typing import Final
@@ -12,7 +16,6 @@ from dama.regras.partida import Partida, Registro
 from dama.regras.tabuleiro import SIMBOLO_VAZIA, SIMBOLOS, notacao, para_texto
 from dama.regras.tipos import BRANCA, CORES, DAMA, NOME_COR, PEDRA, Lance, eh_dama
 
-# Os textos do prompt sao conteudo, nao parametros: ficam aqui, junto de quem os monta.
 INSTRUCOES: Final[str] = """\
 Voce joga damas brasileiras num tabuleiro 8x8.
 
@@ -38,10 +41,12 @@ analise para fundamentar a escolha e cite-a no motivo."""
 
 
 def instrucoes(com_analise: bool) -> str:
+    """Instrucoes de sistema, com ou sem a explicacao da analise do Minimax."""
     return INSTRUCOES + (INSTRUCOES_ANALISE if com_analise else "")
 
 
 def _contagem(partida: Partida) -> str:
+    """Quantas pecas e quantas damas cada lado tem, em texto."""
     partes: list[str] = []
     for cor in CORES:
         pecas = [p for p in partida.tab if p * cor > 0]
@@ -51,11 +56,13 @@ def _contagem(partida: Partida) -> str:
 
 
 def _recentes(partida: Partida) -> list[Registro]:
+    """Os ultimos registros do historico, no limite da configuracao."""
     quantos = obter_config().llm_ultimos_lances
     return partida.historico[-quantos:] if quantos else []
 
 
 def _ultimos(partida: Partida) -> str:
+    """Os ultimos lances da partida, em texto, para dar contexto a LLM."""
     recentes = _recentes(partida)
     if not recentes:
         return "nenhum (inicio da partida)"
@@ -65,6 +72,10 @@ def _ultimos(partida: Partida) -> str:
 def montar_pedido(
     partida: Partida, lances: list[Lance], analise: AnalisePosicao | None = None
 ) -> str:
+    """Texto do pedido: posicao, contexto e a lista numerada de lances legais.
+
+    Com `analise`, cada lance traz a nota, o rotulo e a continuacao do Minimax.
+    """
     cor = partida.vez
     meu, dele = (SIMBOLOS[PEDRA], SIMBOLOS[DAMA]), (SIMBOLOS[-PEDRA], SIMBOLOS[-DAMA])
     sentido = "sobem no diagrama (da linha 1 para a 8)"
@@ -103,6 +114,7 @@ def montar_pedido(
 
 
 def montar_correcao(n_lances: int) -> str:
+    """Mensagem enviada quando a resposta anterior nao trouxe um lance valido."""
     return (
         "Resposta invalida. Responda apenas com duas linhas:\n"
         f"LANCE: <numero de 1 a {n_lances}>\n"

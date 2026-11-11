@@ -45,7 +45,7 @@ target-version = "py312"
 src = ["src", "tests"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM", "ANN", "TID"]
+select = ["E", "F", "I", "UP", "B", "SIM", "ANN", "TID", "D1"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 # Imports sempre completos: `from dama.regras.tipos import ...`, nunca `from .tipos`.

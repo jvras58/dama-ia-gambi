@@ -1,4 +1,18 @@
-"""Representacao do tabuleiro, coordenadas, notacao e posicao inicial."""
+"""Representacao do tabuleiro, coordenadas, notacao e posicao inicial.
+
+A geometria (tabuleiro 8x8, 32 casas escuras, 12 pedras por lado) faz parte das regras
+e nao e ajustavel; por isso fica aqui, e nao na configuracao.
+
+Tabelas deste modulo:
+- `DIRECOES`: as quatro diagonais, como (delta_linha, delta_coluna).
+- `FRENTE`: para cada cor, os indices em `DIRECOES` para onde as pedras avancam.
+- `LINHA_DE_PROMOCAO` e `LINHA_DE_BASE`: para cada cor, a linha em que a pedra vira
+  dama e a linha de onde ela parte.
+- `RAIOS[casa][direcao]`: as casas a partir de `casa` naquela diagonal, da mais perto
+  para a mais longe.
+- `LINHA[casa]` e `COLUNA[casa]`: coordenadas de cada casa.
+- `SIMBOLOS`: o caractere que representa cada peca no diagrama em texto.
+"""
 
 from collections.abc import Mapping
 from typing import Final
@@ -19,7 +33,6 @@ from dama.regras.tipos import (
 type Raio = tuple[Casa, ...]
 type Raios = tuple[tuple[Raio, ...], ...]
 
-# Geometria do tabuleiro 8x8: faz parte das regras, nao e ajustavel.
 LADO: Final[int] = 8
 ULTIMA_LINHA: Final[int] = LADO - 1
 N_CASAS: Final[int] = LADO * LADO // 2
@@ -27,11 +40,8 @@ PEDRAS_POR_LADO: Final[int] = 12
 COLUNAS: Final[str] = "abcdefgh"
 FILEIRAS: Final[str] = "12345678"
 
-# Direcoes diagonais como (delta_linha, delta_coluna).
 DIRECOES: Final[tuple[tuple[int, int], ...]] = ((1, 1), (1, -1), (-1, 1), (-1, -1))
-# Indices em DIRECOES para onde cada cor avanca.
 FRENTE: Final[Mapping[Cor, tuple[int, int]]] = {BRANCA: (0, 1), PRETA: (2, 3)}
-# Linha em que a pedra de cada cor vira dama, e linha de onde ela parte.
 LINHA_DE_PROMOCAO: Final[Mapping[Cor, int]] = {BRANCA: ULTIMA_LINHA, PRETA: 0}
 LINHA_DE_BASE: Final[Mapping[Cor, int]] = {BRANCA: 0, PRETA: ULTIMA_LINHA}
 
@@ -44,11 +54,13 @@ def indice(linha: int, coluna: int) -> Casa:
 
 
 def linha_coluna(i: Casa) -> tuple[int, int]:
+    """Linha e coluna (0-7) da casa de indice `i`."""
     linha = i // (LADO // 2)
     return linha, (i % (LADO // 2)) * 2 + (linha % 2)
 
 
 def _calcular_raios() -> Raios:
+    """Monta a tabela `RAIOS`: para cada casa e direcao, as casas daquela diagonal."""
     raios: list[tuple[Raio, ...]] = []
     for i in range(N_CASAS):
         linha, coluna = linha_coluna(i)
@@ -64,9 +76,7 @@ def _calcular_raios() -> Raios:
     return tuple(raios)
 
 
-# RAIOS[casa][direcao] = casas a partir de `casa` naquela diagonal, da mais perto a mais longe.
 RAIOS: Final[Raios] = _calcular_raios()
-
 LINHA: Final[tuple[int, ...]] = tuple(linha_coluna(i)[0] for i in range(N_CASAS))
 COLUNA: Final[tuple[int, ...]] = tuple(linha_coluna(i)[1] for i in range(N_CASAS))
 
@@ -78,13 +88,12 @@ def posicao_inicial() -> Tabuleiro:
 
 
 def tabuleiro_vazio() -> list[Peca]:
+    """Tabuleiro sem pecas, como lista editavel."""
     return [VAZIA] * N_CASAS
 
 
-# --- Notacao ---------------------------------------------------------------
-
-
 def nome_casa(i: Casa) -> str:
+    """Nome da casa de indice `i`, como 'c3'."""
     linha, coluna = linha_coluna(i)
     return f"{COLUNAS[coluna]}{FILEIRAS[linha]}"
 

@@ -1,4 +1,8 @@
-"""Salvar, recarregar e exportar partidas em JSON."""
+"""Salvar, recarregar e exportar partidas em JSON.
+
+`VERSAO` e a versao do formato do arquivo. Ela muda junto com o codigo que le o
+arquivo, por isso fica aqui e nao na configuracao.
+"""
 
 import json
 import os
@@ -12,19 +16,22 @@ from dama.minimax.analise import Rotulo
 from dama.regras.partida import Partida, PartidaDict
 from dama.regras.tipos import CORES, NOME_COR, Cor, Lado
 
-# Versao do formato do arquivo; muda junto com o codigo que o le, por isso nao e configuravel.
 VERSAO: Final[int] = 1
 _SUFIXO_TEMPORARIO: Final[str] = ".tmp"
 _CODIFICACAO: Final[str] = "utf-8"
 
 
 class ResumoLadoDict(TypedDict):
+    """Resumo do juiz para um lado, como gravado em JSON."""
+
     lances: int
     contagem: dict[Rotulo, int]
     perda_media: float
 
 
 class PartidaSalvaDict(TypedDict):
+    """Conteudo completo do arquivo de uma partida."""
+
     versao: int
     modo: Modo
     simulado: bool
@@ -39,6 +46,7 @@ class PartidaSalvaDict(TypedDict):
 
 
 def para_dict(orq: Orquestrador) -> PartidaSalvaDict:
+    """Monta o conteudo do arquivo a partir do estado do orquestrador."""
     return {
         "versao": VERSAO,
         "modo": orq.modo,
@@ -74,21 +82,28 @@ def salvar(orq: Orquestrador, caminho: Path) -> None:
 
 @dataclass
 class PartidaSalva:
+    """Uma partida lida do disco, pronta para ser continuada."""
+
     partida: Partida
     lances: list[LanceJogado]
-    dados: PartidaSalvaDict  # o JSON completo (modo, lados, conselheiro, ...)
+    dados: PartidaSalvaDict
+    """O JSON completo (modo, lados, conselheiro, ...)."""
 
     def descricao_do_lado(self, cor: Cor) -> DescricaoControlador:
+        """Descricao do controlador que jogava com `cor`."""
         return self.dados["lados"][NOME_COR[cor]]
 
 
 def carregar(caminho: Path) -> PartidaSalva:
-    """Le uma partida salva, refazendo os lances para validar o arquivo."""
+    """Le uma partida salva, refazendo os lances para validar o arquivo.
+
+    O JSON vem sem tipos: `Partida.de_dict` e `LanceJogado.de_dict` validam o
+    conteudo ao reconstruir os objetos.
+    """
     bruto: object = json.loads(caminho.read_text(_CODIFICACAO))
     versao: object = bruto.get("versao") if isinstance(bruto, dict) else None
     if versao != VERSAO:
         raise ValueError(f"versao de arquivo nao suportada: {versao!r}")
-    # O JSON vem sem tipos; Partida.de_dict e LanceJogado.de_dict validam o conteudo.
     dados = cast(PartidaSalvaDict, bruto)
     return PartidaSalva(
         partida=Partida.de_dict(dados["partida"]),

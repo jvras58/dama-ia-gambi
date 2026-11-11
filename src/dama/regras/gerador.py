@@ -20,6 +20,7 @@ def gerar_lances(tab: Tabuleiro, vez: Cor) -> list[Lance]:
 
 
 def _gerar_simples(tab: Tabuleiro, vez: Cor) -> list[Lance]:
+    """Lances sem captura: pedra uma casa a frente, dama a qualquer distancia."""
     lances: list[Lance] = []
     frente = FRENTE[vez]
     for i in range(N_CASAS):
@@ -42,6 +43,7 @@ def _gerar_simples(tab: Tabuleiro, vez: Cor) -> list[Lance]:
 
 
 def _gerar_capturas(tab: Tabuleiro, vez: Cor) -> list[Lance]:
+    """Todas as sequencias de captura do lado `vez`, sem a lei da maioria."""
     lances: list[Lance] = []
     for i in range(N_CASAS):
         peca = tab[i]
@@ -63,6 +65,11 @@ def _capturas_pedra(
     capturadas: tuple[Casa, ...],
     saida: list[Lance],
 ) -> None:
+    """Estende a captura de uma pedra a partir de `pos` e guarda as completas em `saida`.
+
+    A casa de origem conta como vazia, porque a peca ja saiu de la. Pecas ja
+    saltadas neste lance (`capturadas`) nao podem ser saltadas de novo.
+    """
     continuou = False
     for raio in RAIOS[pos]:
         if len(raio) < 2:
@@ -70,7 +77,6 @@ def _capturas_pedra(
         alvo, pouso = raio[0], raio[1]
         if tab[alvo] * vez >= 0 or alvo in capturadas:
             continue
-        # A casa de origem conta como vazia: a peca ja saiu de la.
         if tab[pouso] != VAZIA and pouso != origem:
             continue
         continuou = True
@@ -88,13 +94,18 @@ def _capturas_dama(
     capturadas: tuple[Casa, ...],
     saida: list[Lance],
 ) -> None:
+    """Estende a captura de uma dama a partir de `pos` e guarda as completas em `saida`.
+
+    Em cada diagonal, so a primeira peca encontrada pode ser capturada, e apenas se
+    for inimiga e ainda nao tiver sido saltada. A dama pode pousar em qualquer casa
+    livre depois dela. A casa de origem conta como vazia.
+    """
     continuou = False
     for raio in RAIOS[pos]:
         alvo = -1
         for k, c in enumerate(raio):
             if tab[c] == VAZIA or c == origem:
                 continue
-            # Primeira peca no caminho: so serve se for inimiga ainda nao capturada.
             if tab[c] * vez < 0 and c not in capturadas:
                 alvo = k
             break

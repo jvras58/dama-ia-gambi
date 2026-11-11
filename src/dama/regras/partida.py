@@ -1,4 +1,8 @@
-"""Estado de uma partida: lado da vez, historico, fim de jogo e exportacao."""
+"""Estado de uma partida: lado da vez, historico, fim de jogo e exportacao.
+
+`SEM_LANCE` marca, na lista de lances em texto, o lance que as brancas nao fizeram
+quando a partida comeca com as pretas.
+"""
 
 from dataclasses import dataclass, field
 from typing import Final, Self, TypedDict
@@ -19,15 +23,16 @@ from dama.regras.tipos import (
     eh_dama,
 )
 
-# Marca, na lista de lances em texto, o lance que as brancas nao fizeram.
 SEM_LANCE: Final[str] = "..."
 
 
 class LanceIlegal(ValueError):
-    pass
+    """O lance pedido nao e permitido na posicao ou no estado atual."""
 
 
 class PartidaDict(TypedDict):
+    """Forma serializavel de `Partida`."""
+
     tabuleiro_inicial: list[Peca]
     vez_inicial: Cor
     lances: list[str]
@@ -49,6 +54,11 @@ class Registro:
 
 @dataclass
 class Partida:
+    """Uma partida em andamento ou encerrada.
+
+    `lances_de_dama` conta os lances seguidos de dama sem captura, para o empate.
+    """
+
     tab: Tabuleiro = field(default_factory=posicao_inicial)
     vez: Cor = BRANCA
     lances_de_dama: int = 0
@@ -58,17 +68,18 @@ class Partida:
     _vez_inicial: Cor = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
+        """Guarda a posicao e a vez iniciais, para exportar a partida."""
         self._tab_inicial = self.tab
         self._vez_inicial = self.vez
 
-    # --- Lances ------------------------------------------------------------
-
     def lances_legais(self) -> list[Lance]:
+        """Lances legais do lado da vez; nenhum se a partida ja empatou."""
         if self.resultado_por_empate():
             return []
         return gerar_lances(self.tab, self.vez)
 
     def jogar(self, lance: Lance) -> Registro:
+        """Aplica um lance legal e passa a vez; levanta `LanceIlegal` se nao for legal."""
         if lance not in gerar_lances(self.tab, self.vez) or self.resultado_por_empate():
             raise LanceIlegal(f"lance ilegal para as {NOME_COR[self.vez]}: {notacao(lance)}")
         registro = Registro(
@@ -93,6 +104,7 @@ class Partida:
         return self.jogar(self.lance_de_texto(texto))
 
     def lance_de_texto(self, texto: str) -> Lance:
+        """Encontra o lance legal escrito como 'c3-d4' ou 'c3xe5'."""
         alvo = texto.strip().lower().replace(":", "x")
         for lance in gerar_lances(self.tab, self.vez):
             if notacao(lance) == alvo:
@@ -100,6 +112,7 @@ class Partida:
         raise LanceIlegal(f"lance ilegal ou mal escrito: {texto!r}")
 
     def desfazer(self) -> Registro:
+        """Volta ao estado anterior ao ultimo lance."""
         if not self.historico:
             raise LanceIlegal("nao ha lance para desfazer")
         registro = self.historico.pop()
@@ -109,27 +122,28 @@ class Partida:
         self.empate_por_acordo = False
         return registro
 
-    # --- Fim de jogo -------------------------------------------------------
-
     def resultado_por_empate(self) -> bool:
+        """Diz se a partida empatou, por acordo ou por lances de dama."""
         limite = obter_config().regras_limite_lances_de_dama
         return self.empate_por_acordo or self.lances_de_dama >= limite
 
     def resultado(self) -> Resultado | None:
-        """Quem venceu, empate, ou None se o jogo continua."""
+        """Quem venceu, empate, ou None se o jogo continua.
+
+        Quem fica sem pecas ou sem lances na sua vez perde.
+        """
         if self.resultado_por_empate():
             return Resultado.EMPATE
         if not gerar_lances(self.tab, self.vez):
-            # Sem pecas ou sem lances: o lado da vez perde.
             return VITORIA_DE[-self.vez]
         return None
 
     def encerrada(self) -> bool:
+        """Diz se a partida ja tem resultado."""
         return self.resultado() is not None
 
-    # --- Exportacao --------------------------------------------------------
-
     def para_dict(self) -> PartidaDict:
+        """Converte para a forma gravada em JSON."""
         return {
             "tabuleiro_inicial": list(self._tab_inicial),
             "vez_inicial": self._vez_inicial,
@@ -140,6 +154,7 @@ class Partida:
 
     @classmethod
     def de_dict(cls, dados: PartidaDict) -> Self:
+        """Reconstroi a partida refazendo os lances, o que valida cada um."""
         partida = cls(tab=tuple(dados["tabuleiro_inicial"]), vez=dados["vez_inicial"])
         for texto in dados["lances"]:
             partida.jogar_texto(texto)

@@ -34,13 +34,19 @@ def rotular(perda: int) -> Rotulo:
 
 @dataclass(frozen=True, slots=True)
 class AnaliseLance:
+    """Um lance legal com a pontuacao, a perda e o rotulo dados pelo Minimax."""
+
     lance: Lance
     texto: str
-    pontuacao: int  # centesimos de pedra, do ponto de vista de quem joga
-    perda: int  # diferenca para o melhor lance (0 = melhor)
+    pontuacao: int
+    """Centesimos de pedra, do ponto de vista de quem joga."""
+    perda: int
+    """Diferenca para o melhor lance (0 = melhor)."""
     rotulo: Rotulo
-    linha: tuple[str, ...]  # continuacao prevista, em notacao
-    mate_em: int | None  # >0 vence em N lances proprios; <0 perde em N; None = sem mate a vista
+    linha: tuple[str, ...]
+    """Continuacao prevista, em notacao."""
+    mate_em: int | None
+    """>0 vence em N lances proprios; <0 perde em N; None = sem mate a vista."""
 
     def descricao(self) -> str:
         """Texto curto para prompt e interface: '+0.35 (bom)' ou 'vence em 2 (melhor)'."""
@@ -54,16 +60,21 @@ class AnaliseLance:
 
 @dataclass(frozen=True, slots=True)
 class AnalisePosicao:
+    """Todos os lances legais de uma posicao, analisados."""
+
     vez: Cor
-    lances: tuple[AnaliseLance, ...]  # do melhor para o pior
+    lances: tuple[AnaliseLance, ...]
+    """Do melhor para o pior."""
     profundidade: int
     nos: int
 
     @property
     def melhor(self) -> AnaliseLance | None:
+        """O lance mais bem pontuado, ou None se nao ha lances."""
         return self.lances[0] if self.lances else None
 
     def de(self, lance: Lance) -> AnaliseLance | None:
+        """A analise de um lance especifico, ou None se ele nao e legal."""
         for item in self.lances:
             if item.lance == lance:
                 return item
@@ -76,6 +87,10 @@ def em_pedras(pontuacao: float) -> float:
 
 
 def _mate_em(pontuacao: int) -> int | None:
+    """Em quantos lances proprios a vitoria (positivo) ou a derrota (negativo) e forcada.
+
+    Devolve None se a pontuacao nao indica resultado forcado.
+    """
     config = obter_config()
     if abs(pontuacao) < config.minimax_limiar_vitoria:
         return None
@@ -121,15 +136,20 @@ class Julgamento:
 
 @dataclass(frozen=True, slots=True)
 class ResumoLado:
+    """Como um lado jogou, segundo o juiz."""
+
     lances: int
     contagem: dict[Rotulo, int]
     perda_media: float
 
 
 def resumir(julgamentos: Iterable[Julgamento]) -> dict[Lado, ResumoLado]:
-    """Resumo do juiz por lado, a partir do julgamento de cada lance jogado."""
+    """Resumo do juiz por lado, a partir do julgamento de cada lance jogado.
+
+    A perda de cada lance tem um teto (`juiz_perda_maxima`), para um mate perdido
+    nao distorcer a media.
+    """
     todos = list(julgamentos)
-    # Mates distorcem a media; a perda de cada lance tem um teto.
     teto = obter_config().juiz_perda_maxima
     resumo: dict[Lado, ResumoLado] = {}
     for cor in CORES:

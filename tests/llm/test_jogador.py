@@ -1,3 +1,5 @@
+"""Testes da consulta a LLM: novas tentativas, fallback e registro."""
+
 from apoio.servidor_falso import ServidorFalso
 from dama.llm.jogador import Decisao, Origem, RegistroLLM, escolher_lance
 from dama.minimax.analise import AnaliseLance, AnalisePosicao, analisar
@@ -6,6 +8,7 @@ from dama.regras.tabuleiro import montar, notacao
 
 
 def _posicao() -> tuple[Partida, AnalisePosicao]:
+    """Posicao inicial com a analise do Minimax."""
     partida = Partida()
     return partida, analisar(partida.tab, partida.vez, profundidade=3)
 
@@ -17,6 +20,7 @@ async def _pedir(
     com_analise: bool = False,
     tentativas_extras: int | None = None,
 ) -> Decisao:
+    """Consulta a LLM do servidor falso, sem esperar entre tentativas."""
     return await escolher_lance(
         servidor.cliente(),
         "ana-1",
@@ -29,16 +33,19 @@ async def _pedir(
 
 
 def _registro(decisao: Decisao) -> RegistroLLM:
+    """Registro da consulta, garantindo que ele existe."""
     assert decisao.registro is not None
     return decisao.registro
 
 
 def _melhor(analise: AnalisePosicao) -> AnaliseLance:
+    """Melhor lance da analise, garantindo que ele existe."""
     assert analise.melhor is not None
     return analise.melhor
 
 
 async def test_resposta_valida(servidor: ServidorFalso) -> None:
+    """Uma resposta no formato pedido vira o lance escolhido."""
     partida, analise = _posicao()
     servidor.roteiro = ["LANCE: 2\nMOTIVO: ocupa o centro."]
     decisao = await _pedir(servidor, partida, analise)
@@ -53,6 +60,7 @@ async def test_resposta_valida(servidor: ServidorFalso) -> None:
 
 
 async def test_resposta_invalida_gera_correcao_e_nova_tentativa(servidor: ServidorFalso) -> None:
+    """Resposta sem lance gera uma mensagem de correcao e uma nova chamada."""
     partida, analise = _posicao()
     servidor.roteiro = ["Que jogo interessante!", "LANCE: 3\nMOTIVO: agora sim."]
     decisao = await _pedir(servidor, partida, analise)
@@ -67,6 +75,7 @@ async def test_resposta_invalida_gera_correcao_e_nova_tentativa(servidor: Servid
 async def test_ca11_lixo_repetido_vira_fallback_e_nunca_lance_ilegal(
     servidor: ServidorFalso,
 ) -> None:
+    """CA-11: respostas invalidas repetidas terminam no lance do Minimax."""
     partida, analise = _posicao()
     servidor.padrao = "LANCE: 42\nMOTIVO: jogo h9."
     decisao = await _pedir(servidor, partida, analise, tentativas_extras=2)
@@ -79,6 +88,7 @@ async def test_ca11_lixo_repetido_vira_fallback_e_nunca_lance_ilegal(
 
 
 async def test_ca10_hub_indisponivel_vira_fallback_imediato(servidor: ServidorFalso) -> None:
+    """CA-10: com o hub indisponivel, o fallback acontece sem novas tentativas."""
     partida, analise = _posicao()
     servidor.roteiro = [503]
     decisao = await _pedir(servidor, partida, analise)
@@ -89,6 +99,7 @@ async def test_ca10_hub_indisponivel_vira_fallback_imediato(servidor: ServidorFa
 
 
 async def test_participante_ocupado_tenta_de_novo(servidor: ServidorFalso) -> None:
+    """Participante ocupado (409) leva a uma nova tentativa."""
     partida, analise = _posicao()
     servidor.roteiro = [409, "LANCE: 1\nMOTIVO: ok"]
     decisao = await _pedir(servidor, partida, analise)
@@ -97,6 +108,7 @@ async def test_participante_ocupado_tenta_de_novo(servidor: ServidorFalso) -> No
 
 
 async def test_tempo_esgotado_vira_fallback(servidor: ServidorFalso) -> None:
+    """Tempo esgotado termina no lance do Minimax."""
     partida, analise = _posicao()
     servidor.roteiro = [("lento", 2.0)]
     decisao = await escolher_lance(servidor.cliente(timeout_s=0.1), "ana-1", partida, analise)
@@ -104,6 +116,7 @@ async def test_tempo_esgotado_vira_fallback(servidor: ServidorFalso) -> None:
 
 
 async def test_lance_unico_nao_chama_a_llm(servidor: ServidorFalso) -> None:
+    """Com um unico lance legal, a LLM nem e consultada."""
     partida = Partida(tab=montar({"c3": "b", "d4": "p", "h8": "p"}))
     analise = analisar(partida.tab, partida.vez, profundidade=2)
     decisao = await _pedir(servidor, partida, analise)
@@ -113,6 +126,7 @@ async def test_lance_unico_nao_chama_a_llm(servidor: ServidorFalso) -> None:
 
 
 async def test_ca15_analise_so_vai_no_prompt_quando_pedida(servidor: ServidorFalso) -> None:
+    """CA-15: a analise do Minimax so aparece no prompt com `com_analise`."""
     partida, analise = _posicao()
     await _pedir(servidor, partida, analise, com_analise=False)
     sem = servidor.textos_de(-1)
@@ -123,6 +137,7 @@ async def test_ca15_analise_so_vai_no_prompt_quando_pedida(servidor: ServidorFal
 
 
 async def test_registro_marca_quando_a_llm_diverge_do_minimax(servidor: ServidorFalso) -> None:
+    """O registro diz se a LLM escolheu o mesmo lance que o Minimax."""
     partida, analise = _posicao()
     pior = analise.lances[-1].lance
     numero = partida.lances_legais().index(pior) + 1

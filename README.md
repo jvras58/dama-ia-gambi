@@ -32,7 +32,7 @@ Partida só com o Minimax, sem precisar do Gambi:
 uv run dama simular --brancas minimax --pretas minimax:2
 ```
 
-Com LLMs, primeiro suba o Gambi (hub, sala e ao menos um participante com modelo) e confira:
+Com LLMs, primeiro suba o Gambi (hub, sala e ao menos um participante com modelo) e confira. O projeto foi validado com o Gambi 0.7.2; para atualizar, use `gambi self update`. Ao entrar com um participante, o `--model` precisa ser o nome exato do modelo (por exemplo `llama3.2:latest`).
 
 ```bash
 uv run dama checar-gambi --hub http://localhost:3000 --sala CODIGO
@@ -64,12 +64,13 @@ O projeto segue desenvolvimento orientado a especificação (SDD).
 
 ## Convenções de código
 
-Registradas no [ADR 0009](docs/adr/0009-convencoes-de-codigo.md):
+Registradas nos ADRs [0009](docs/adr/0009-convencoes-de-codigo.md) e [0010](docs/adr/0010-docstrings-no-lugar-de-comentarios.md):
 
 - Sem `__init__.py`; `dama` é um pacote de namespace.
 - Imports sempre completos (`from dama.regras.tipos import Lance`), nunca relativos.
 - Todo valor ajustável fica em `Settings` ([src/dama/config.py](src/dama/config.py)) e pode ser trocado por variável `DAMA_*` ou pelo `.env`.
 - Vocabulários fechados são enums; funções são todas anotadas e o `mypy --strict` passa em `src/`.
+- Todo módulo, classe e função tem docstring; não há comentários soltos. O teste `tests/test_convencoes.py` garante isso.
 
 ## Fluxo de trabalho
 

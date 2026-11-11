@@ -12,6 +12,8 @@ from dama.regras.partida import Partida
 
 
 class TipoControlador(StrEnum):
+    """Quem pode controlar um lado da partida."""
+
     LLM = "llm"
     MINIMAX = "minimax"
     HUMANO = "humano"
@@ -27,9 +29,12 @@ class DescricaoControlador(TypedDict):
 
 
 class Controlador(Protocol):
+    """O que o orquestrador espera de quem controla um lado."""
+
     tipo: ClassVar[TipoControlador]
 
-    def descricao(self) -> DescricaoControlador: ...
+    def descricao(self) -> DescricaoControlador:
+        """Forma serializavel do controlador, para gravar com a partida."""
 
     async def escolher(self, partida: Partida, analise: AnalisePosicao) -> Decisao | None:
         """Lance escolhido para a posicao atual, ou None se o lance vem de fora (humano)."""
@@ -37,6 +42,8 @@ class Controlador(Protocol):
 
 
 class ControladorLLM:
+    """Pede cada lance a um participante do Gambi."""
+
     tipo: ClassVar[TipoControlador] = TipoControlador.LLM
 
     def __init__(
@@ -47,6 +54,10 @@ class ControladorLLM:
         tentativas_extras: int | None = None,
         espera_ocupado_s: float | None = None,
     ) -> None:
+        """Guarda o cliente e o participante.
+
+        `tentativas_extras` e `espera_ocupado_s` vem da configuracao quando omitidos.
+        """
         config = obter_config()
         self.cliente: ClienteGambi = cliente
         self.modelo: str = modelo
@@ -59,9 +70,11 @@ class ControladorLLM:
         )
 
     def descricao(self) -> DescricaoControlador:
+        """Tipo, participante e se a analise do Minimax vai no prompt."""
         return {"tipo": self.tipo, "modelo": self.modelo, "com_analise": self.com_analise}
 
     async def escolher(self, partida: Partida, analise: AnalisePosicao) -> Decisao:
+        """Consulta a LLM; se ela falhar, devolve o lance do Minimax."""
         return await escolher_lance(
             self.cliente,
             self.modelo,
@@ -83,12 +96,15 @@ class ControladorMinimax:
     tipo: ClassVar[TipoControlador] = TipoControlador.MINIMAX
 
     def __init__(self, profundidade: int | None = None) -> None:
+        """Guarda a profundidade propria (None = usar a do juiz)."""
         self.profundidade: int | None = profundidade
 
     def descricao(self) -> DescricaoControlador:
+        """Tipo e profundidade propria."""
         return {"tipo": self.tipo, "profundidade": self.profundidade}
 
     async def escolher(self, partida: Partida, analise: AnalisePosicao) -> Decisao:
+        """Devolve o melhor lance da analise (do juiz ou propria)."""
         if self.profundidade is not None and len(analise.lances) > 1:
             analise = await asyncio.to_thread(
                 analisar, partida.tab, partida.vez, self.profundidade, None
@@ -107,9 +123,11 @@ class ControladorHumano:
     tipo: ClassVar[TipoControlador] = TipoControlador.HUMANO
 
     def descricao(self) -> DescricaoControlador:
+        """So o tipo: um humano nao tem parametros."""
         return {"tipo": self.tipo}
 
     async def escolher(self, partida: Partida, analise: AnalisePosicao) -> None:
+        """Nao escolhe nada: o lance humano chega por `lance_humano`."""
         return None
 
 

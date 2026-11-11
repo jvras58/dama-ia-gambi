@@ -1,3 +1,5 @@
+"""Testes da busca Minimax, dos rotulos e do resumo do juiz."""
+
 import time
 
 from dama.config import obter_config
@@ -15,6 +17,7 @@ from dama.regras.tipos import BRANCA, PRETA, Lado
 
 
 def test_todos_os_lances_legais_sao_pontuados() -> None:
+    """A analise pontua todos os lances legais, do melhor para o pior."""
     analise = analisar(posicao_inicial(), BRANCA, profundidade=4)
     assert len(analise.lances) == 7
     assert {a.lance for a in analise.lances} == set(gerar_lances(posicao_inicial(), BRANCA))
@@ -25,6 +28,7 @@ def test_todos_os_lances_legais_sao_pontuados() -> None:
 
 
 def test_busca_e_deterministica() -> None:
+    """Sem limite de tempo, a mesma posicao da a mesma analise."""
     tab = montar({"c3": "b", "e3": "b", "g3": "b", "b6": "p", "d6": "p", "f6": "p"})
     a = analisar(tab, BRANCA, profundidade=6)
     b = analisar(tab, BRANCA, profundidade=6)
@@ -32,12 +36,13 @@ def test_busca_e_deterministica() -> None:
 
 
 def test_posicao_sem_lances() -> None:
+    """Posicao sem lances legais devolve uma analise vazia."""
     analise = analisar(montar({"a1": "b"}), PRETA, profundidade=4)
     assert analise.lances == () and analise.melhor is None
 
 
 def test_vitoria_em_um_lance() -> None:
-    # Capturar a ultima peca preta vence na hora.
+    """Capturar a ultima peca preta vence na hora."""
     analise = analisar(montar({"c3": "b", "d4": "p"}), BRANCA, profundidade=4)
     assert analise.melhor.texto == "c3xe5"
     assert analise.melhor.mate_em == 1
@@ -45,16 +50,19 @@ def test_vitoria_em_um_lance() -> None:
 
 
 def test_vitoria_forcada_em_dois_lances() -> None:
-    # A pedra preta em a3 so pode descer para b2, onde e capturada.
+    """A busca ve a vitoria em dois lances e preve a continuacao.
+
+    A pedra preta em a3 so pode descer para b2, onde e capturada.
+    """
     tab = montar({"c1": "b", "e1": "b", "a3": "p"})
     analise = analisar(tab, BRANCA, profundidade=6)
     assert analise.melhor.pontuacao >= obter_config().minimax_limiar_vitoria
     assert analise.melhor.mate_em == 2
-    assert analise.melhor.linha  # ha uma continuacao prevista
+    assert analise.melhor.linha
 
 
 def test_derrota_forcada_e_sinalizada() -> None:
-    # As pretas so tem um lance, e ele perde a ultima peca.
+    """As pretas so tem um lance, e ele perde a ultima peca: derrota sinalizada."""
     tab = montar({"c1": "b", "a1": "b", "a3": "p"})
     analise = analisar(tab, PRETA, profundidade=6)
     assert len(analise.lances) == 1
@@ -63,8 +71,11 @@ def test_derrota_forcada_e_sinalizada() -> None:
 
 
 def test_ca13_captura_que_ganha_peca_sem_compensacao_e_o_melhor_lance() -> None:
-    # Duas capturas de uma peca. c3xa5 fica com a peca; c3xe5 e recapturada por f6xd4.
-    # A pedra em g7 protege f6, senao a lei da maioria obrigaria c3xe5xg7.
+    """CA-13: entre duas capturas, a que fica com a peca e o melhor lance.
+
+    c3xa5 fica com a peca; c3xe5 e recapturada por f6xd4. A pedra em g7 protege
+    f6, senao a lei da maioria obrigaria c3xe5xg7.
+    """
     tab = montar({"c3": "b", "a1": "b", "b4": "p", "d4": "p", "f6": "p", "g7": "p"})
     analise = analisar(tab, BRANCA, profundidade=4)
     por_texto = {a.texto: a for a in analise.lances}
@@ -75,8 +86,11 @@ def test_ca13_captura_que_ganha_peca_sem_compensacao_e_o_melhor_lance() -> None:
 
 
 def test_ca13_lance_que_entrega_peca_de_graca_e_erro() -> None:
-    # c3-d4 coloca a pedra na frente de e5, com c3 vazia atras: as pretas capturam de graca.
-    # c3-b4 e a1-b2 sao seguros.
+    """CA-13: entregar uma peca de graca e rotulado como erro.
+
+    c3-d4 coloca a pedra na frente de e5, com c3 vazia atras, e as pretas capturam
+    de graca. c3-b4 e a1-b2 sao seguros.
+    """
     tab = montar({"c3": "b", "a1": "b", "e5": "p", "g7": "p", "h8": "p"})
     analise = analisar(tab, BRANCA, profundidade=4)
     por_texto = {a.texto: a for a in analise.lances}
@@ -86,7 +100,7 @@ def test_ca13_lance_que_entrega_peca_de_graca_e_erro() -> None:
 
 
 def test_quiescencia_nao_para_no_meio_de_uma_troca() -> None:
-    # Com profundidade 1, a busca ainda ve que c3-d4 perde a pedra para e5xc3.
+    """Com profundidade 1, a busca ainda ve que c3-d4 perde a pedra para e5xc3."""
     tab = montar({"c3": "b", "a1": "b", "e5": "p", "g7": "p", "h8": "p"})
     analise = analisar(tab, BRANCA, profundidade=1)
     por_texto = {a.texto: a for a in analise.lances}
@@ -94,6 +108,7 @@ def test_quiescencia_nao_para_no_meio_de_uma_troca() -> None:
 
 
 def test_limite_de_tempo_e_respeitado() -> None:
+    """Com limite de tempo, a busca devolve a ultima profundidade concluida."""
     inicio = time.perf_counter()
     resultado = buscar_raiz(posicao_inicial(), BRANCA, profundidade_max=30, tempo_s=0.3)
     decorrido = time.perf_counter() - inicio
@@ -103,6 +118,7 @@ def test_limite_de_tempo_e_respeitado() -> None:
 
 
 def test_rotulos() -> None:
+    """Os rotulos mudam exatamente nos limites da configuracao."""
     config = obter_config()
     bom, duvidoso = config.juiz_limite_bom, config.juiz_limite_duvidoso
     assert rotular(0) is Rotulo.MELHOR
@@ -113,6 +129,7 @@ def test_rotulos() -> None:
 
 
 def test_resumo_do_juiz_por_lado() -> None:
+    """O resumo conta os rotulos e a perda media de cada lado em separado."""
     analise = analisar(posicao_inicial(), BRANCA, profundidade=2)
     melhor, pior = analise.lances[0], analise.lances[-1]
     resumo = resumir(

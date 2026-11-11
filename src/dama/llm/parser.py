@@ -5,6 +5,9 @@ Ordem de tentativa:
 2. um lance em notacao ('c3-d4', 'c3xe5') que esteja na lista de legais;
 3. um unico numero valido solto no texto.
 Qualquer ambiguidade e tratada como resposta invalida.
+
+As expressoes regulares descrevem o formato da resposta; nao sao parametros
+ajustaveis, por isso ficam aqui e nao na configuracao.
 """
 
 import re
@@ -13,7 +16,6 @@ from typing import Final
 
 from dama.config import obter_config
 
-# Os padroes descrevem o formato da resposta; nao sao parametros ajustaveis.
 _PENSAMENTO: Final[re.Pattern[str]] = re.compile(
     r"<think(?:ing)?>.*?</think(?:ing)?>", re.DOTALL | re.IGNORECASE
 )
@@ -28,11 +30,15 @@ _ESPACOS: Final[re.Pattern[str]] = re.compile(r"\s+")
 
 
 def _limpar(texto: str) -> str:
+    """Remove os blocos de raciocinio (<think>...</think>) da resposta."""
     return _PENSAMENTO.sub(" ", texto)
 
 
 def extrair_lance(texto: str, legais: Sequence[str]) -> int | None:
-    """Indice (base 0) do lance escolhido em `legais`, ou None se a resposta nao serve."""
+    """Indice (base 0) do lance escolhido em `legais`, ou None se a resposta nao serve.
+
+    Na notacao, o separador nao importa: 'c3-e5' serve para a captura 'c3xe5'.
+    """
     texto = _limpar(texto)
     n = len(legais)
 
@@ -45,7 +51,6 @@ def extrair_lance(texto: str, legais: Sequence[str]) -> int | None:
     for trecho in _NOTACAO.findall(texto):
         normal = _ESPACOS.sub("", trecho.lower()).replace(":", "x")
         for i, legal in enumerate(legais):
-            # Aceita 'c3-e5' para a captura 'c3xe5': o separador nao importa.
             if _SEPARADOR.split(normal) == _SEPARADOR.split(legal):
                 citados.add(i)
     if citados:
@@ -59,6 +64,7 @@ def extrair_lance(texto: str, legais: Sequence[str]) -> int | None:
 
 
 def extrair_motivo(texto: str) -> str:
+    """Texto depois de 'MOTIVO:', limitado a uma linha; vazio se nao houver."""
     achado = _MOTIVO.search(_limpar(texto))
     if not achado:
         return ""

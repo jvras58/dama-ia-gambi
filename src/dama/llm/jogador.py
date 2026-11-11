@@ -23,13 +23,17 @@ class Origem(StrEnum):
     """De onde veio um lance jogado."""
 
     LLM = "llm"
-    FALLBACK = "fallback"  # a LLM falhou e o Minimax jogou no lugar
-    UNICO = "unico"  # so havia um lance legal
+    FALLBACK = "fallback"
+    """A LLM falhou e o Minimax jogou no lugar."""
+    UNICO = "unico"
+    """So havia um lance legal."""
     MINIMAX = "minimax"
     HUMANO = "humano"
 
 
 class RegistroLLMDict(TypedDict):
+    """Forma serializavel de `RegistroLLM`."""
+
     participante: str
     com_analise: bool
     prompt: str
@@ -56,6 +60,7 @@ class RegistroLLM:
     seguiu_minimax: bool | None = None
 
     def para_dict(self) -> RegistroLLMDict:
+        """Converte para a forma gravada em JSON."""
         return {
             "participante": self.participante,
             "com_analise": self.com_analise,
@@ -71,6 +76,8 @@ class RegistroLLM:
 
 @dataclass
 class Decisao:
+    """O lance escolhido para uma posicao, com a origem e o motivo."""
+
     lance: Lance
     origem: Origem
     motivo: str = ""
@@ -105,6 +112,7 @@ async def escolher_lance(
     melhor = analise.melhor.lance if analise.melhor else lances[0]
 
     def concluir(lance: Lance, origem: Origem, motivo: str) -> Decisao:
+        """Completa o registro e monta a decisao final."""
         registro.lance = notacao(lance)
         registro.seguiu_minimax = lance == melhor
         return Decisao(lance, origem, motivo, registro)

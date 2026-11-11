@@ -31,6 +31,8 @@ class _Limite(IntEnum):
 
 
 class _Entrada(NamedTuple):
+    """Item da tabela de transposicao: o que ja se sabe de uma posicao."""
+
     profundidade: int
     valor: int
     limite: _Limite
@@ -38,25 +40,35 @@ class _Entrada(NamedTuple):
 
 
 class TempoEsgotado(Exception):
-    pass
+    """O prazo da busca acabou no meio de uma iteracao."""
 
 
 @dataclass(frozen=True, slots=True)
 class ResultadoLance:
+    """Pontuacao de um lance da raiz e a linha de jogo prevista depois dele."""
+
     lance: Lance
     pontuacao: int
-    linha: Linha  # resposta esperada do adversario em diante
+    linha: Linha
+    """Resposta esperada do adversario em diante."""
 
 
 @dataclass(frozen=True, slots=True)
 class ResultadoBusca:
-    lances: tuple[ResultadoLance, ...]  # do melhor para o pior
-    profundidade: int  # ultima profundidade concluida
+    """Resultado de uma busca na raiz."""
+
+    lances: tuple[ResultadoLance, ...]
+    """Do melhor para o pior."""
+    profundidade: int
+    """Ultima profundidade concluida."""
     nos: int
 
 
 class _Busca:
+    """Estado de uma busca: prazo, contador de nos e tabela de transposicao."""
+
     def __init__(self, prazo: float | None) -> None:
+        """Comeca a busca com a tabela vazia e os limites da configuracao."""
         config = obter_config()
         self.prazo = prazo
         self.nos = 0
@@ -69,6 +81,15 @@ class _Busca:
     def negamax(
         self, tab: Tabuleiro, vez: Cor, prof: int, alfa: int, beta: int, altura: int
     ) -> tuple[int, Linha]:
+        """Pontuacao da posicao para o lado `vez` e a melhor linha de jogo encontrada.
+
+        `prof` e quanto falta aprofundar e `altura` e a distancia ate a raiz.
+        - Sem lances, e derrota; quanto mais longe da raiz, menos ruim.
+        - No horizonte, a busca so para se nao ha captura pendente (quiescencia).
+        - Valores de vitoria dependem da altura, por isso nao sao reaproveitados da
+          tabela de transposicao; o lance guardado ainda serve para ordenar.
+        Levanta `TempoEsgotado` se o prazo acabar.
+        """
         self.nos += 1
         if (
             self.prazo is not None
@@ -79,7 +100,6 @@ class _Busca:
 
         lances = gerar_lances(tab, vez)
         if not lances:
-            # Sem lances: derrota. Quanto mais longe, menos ruim.
             return -(self.vitoria - altura), ()
 
         if prof <= 0 and not lances[0].eh_captura:
@@ -89,7 +109,6 @@ class _Busca:
         chave = (tab, vez)
         entrada = self.tabela.get(chave)
         if entrada is not None:
-            # Posicoes de vitoria dependem da altura; nao reaproveitamos o valor.
             if entrada.profundidade >= prof and abs(entrada.valor) < self.limiar_vitoria:
                 if entrada.limite is _Limite.EXATO:
                     return entrada.valor, (entrada.lance,)
@@ -139,6 +158,10 @@ def buscar_raiz(
     Cada lance da raiz e buscado com janela completa, para que a pontuacao de cada um
     seja exata, e nao apenas a do melhor. Com `tempo_s`, devolve a ultima profundidade
     concluida dentro do prazo (a profundidade 1 sempre e concluida).
+
+    A primeira iteracao roda sem prazo, para sempre haver uma resposta. A ordenacao
+    e estavel: lances empatados ficam na ordem do gerador. A busca para cedo quando
+    todos os lances ja tem resultado forcado, pois aprofundar nao mudaria nada.
     """
     lances = gerar_lances(tab, vez)
     if not lances:
@@ -151,7 +174,6 @@ def buscar_raiz(
     concluida = 0
 
     for prof in range(1, profundidade_max + 1):
-        # A primeira iteracao roda sem prazo para sempre haver uma resposta.
         busca.prazo = prazo if prof > 1 else None
         parcial: list[ResultadoLance] = []
         try:
@@ -162,14 +184,12 @@ def buscar_raiz(
                 parcial.append(ResultadoLance(lance, -valor, linha))
         except TempoEsgotado:
             break
-        # Ordenacao estavel: empates mantem a ordem do gerador.
         parcial.sort(key=lambda r: -r.pontuacao)
         resultado = parcial
         concluida = prof
         ordem = [r.lance for r in resultado]
         if prazo is not None and time.perf_counter() > prazo:
             break
-        # Vitoria ou derrota forcada para todos os lances: aprofundar nao muda nada.
         if all(abs(r.pontuacao) >= busca.limiar_vitoria for r in resultado):
             break
 
