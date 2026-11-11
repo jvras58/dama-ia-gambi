@@ -7,28 +7,55 @@ Cada casa guarda um inteiro:
     0  vazia
     1  pedra branca     2  dama branca
    -1  pedra preta     -2  dama preta
+
+A codificacao em inteiros e parte da representacao (a busca multiplica peca por cor),
+por isso fica aqui e nao na configuracao.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass
+from enum import StrEnum
+from typing import Final
 
-VAZIA = 0
-PEDRA = 1
-DAMA = 2
+type Peca = int  # um dos valores acima
+type Cor = int  # BRANCA ou PRETA
+type Casa = int  # indice de 0 a 31
+type Tabuleiro = tuple[Peca, ...]
 
-BRANCA = 1
-PRETA = -1
+VAZIA: Final[Peca] = 0
+PEDRA: Final[Peca] = 1
+DAMA: Final[Peca] = 2
 
-Tabuleiro = tuple[int, ...]
+BRANCA: Final[Cor] = 1
+PRETA: Final[Cor] = -1
+CORES: Final[tuple[Cor, Cor]] = (BRANCA, PRETA)
 
-NOME_COR = {BRANCA: "brancas", PRETA: "pretas"}
+
+class Lado(StrEnum):
+    BRANCAS = "brancas"
+    PRETAS = "pretas"
 
 
-def cor_de(peca: int) -> int:
+class Resultado(StrEnum):
+    BRANCAS = "brancas"
+    PRETAS = "pretas"
+    EMPATE = "empate"
+
+
+NOME_COR: Final[Mapping[Cor, Lado]] = {BRANCA: Lado.BRANCAS, PRETA: Lado.PRETAS}
+COR_DO_LADO: Final[Mapping[Lado, Cor]] = {Lado.BRANCAS: BRANCA, Lado.PRETAS: PRETA}
+VITORIA_DE: Final[Mapping[Cor, Resultado]] = {
+    BRANCA: Resultado.BRANCAS,
+    PRETA: Resultado.PRETAS,
+}
+
+
+def cor_de(peca: Peca) -> Cor:
     """Cor da peca (BRANCA ou PRETA), ou 0 se a casa esta vazia."""
     return (peca > 0) - (peca < 0)
 
 
-def eh_dama(peca: int) -> bool:
+def eh_dama(peca: Peca) -> bool:
     return peca == DAMA or peca == -DAMA
 
 
@@ -40,12 +67,12 @@ class Lance:
     `capturas` sao as casas das pecas capturadas, na ordem em que foram saltadas.
     """
 
-    origem: int
-    caminho: tuple[int, ...]
-    capturas: tuple[int, ...] = ()
+    origem: Casa
+    caminho: tuple[Casa, ...]
+    capturas: tuple[Casa, ...] = ()
 
     @property
-    def destino(self) -> int:
+    def destino(self) -> Casa:
         return self.caminho[-1]
 
     @property

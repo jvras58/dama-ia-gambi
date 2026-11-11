@@ -1,33 +1,54 @@
+from pathlib import Path
+
 import pytest
 
+from apoio.servidor_falso import ServidorFalso
 from dama.jogo.controladores import (
+    Controlador,
     ControladorHumano,
     ControladorLLM,
     ControladorMinimax,
     criar_controlador,
 )
 from dama.jogo.orquestrador import (
-    AGUARDANDO_EXECUCAO,
-    EM_JOGO,
-    ENCERRADA,
-    PAUSADA,
-    PREPARANDO,
+    DadosEvento,
+    Estado,
+    Evento,
+    Modo,
     Orquestrador,
+    Ouvinte,
     criar_analisador,
 )
 from dama.jogo.persistencia import carregar, salvar
-from dama.minimax.analise import ROTULOS
+from dama.minimax.analise import Rotulo
 from dama.regras.partida import LanceIlegal, Partida
 from dama.regras.tabuleiro import montar
-from dama.regras.tipos import BRANCA, PRETA
+from dama.regras.tipos import BRANCA, PRETA, Cor
 
 RAPIDO = criar_analisador(profundidade=2, tempo_s=None)
 
 
-def _orq(brancas, pretas, **opcoes) -> Orquestrador:
-    opcoes.setdefault("partida", Partida())
-    opcoes.setdefault("analisador", RAPIDO)
-    return Orquestrador(controladores={BRANCA: brancas, PRETA: pretas}, **opcoes)
+def _orq(
+    brancas: Controlador,
+    pretas: Controlador,
+    *,
+    partida: Partida | None = None,
+    modo: Modo = Modo.IA_X_IA,
+    simulado: bool = True,
+    conselheiro: Controlador | None = None,
+    cor_assistida: Cor | None = None,
+    ouvinte: Ouvinte | None = None,
+) -> Orquestrador:
+    return Orquestrador(
+        partida=partida or Partida(),
+        controladores={BRANCA: brancas, PRETA: pretas},
+        analisador=RAPIDO,
+        modo=modo,
+        simulado=simulado,
+        conselheiro=conselheiro,
+        cor_assistida=cor_assistida,
+        ouvinte=ouvinte,
+    )
 
 
 def _escolhe_primeiro(_pedido: str) -> str:
@@ -37,7 +58,7 @@ def _escolhe_primeiro(_pedido: str) -> str:
 # --- Controladores -------------------------------------------------------------
 
 
-async def test_controlador_minimax_joga_o_melhor_da_analise():
+async def test_controlador_minimax_joga_o_melhor_da_analise() -> None:
     partida = Partida()
     analise = await RAPIDO(partida)
     decisao = await ControladorMinimax().escolher(partida, analise)
@@ -45,19 +66,19 @@ async def test_controlador_minimax_joga_o_melhor_da_analise():
     assert decisao.origem == "minimax"
 
 
-async def test_controlador_minimax_com_profundidade_propria():
+async def test_controlador_minimax_com_profundidade_propria() -> None:
     partida = Partida()
     analise = await RAPIDO(partida)
     decisao = await ControladorMinimax(profundidade=1).escolher(partida, analise)
     assert decisao.lance in partida.lances_legais()
 
 
-async def test_controlador_humano_nao_escolhe():
+async def test_controlador_humano_nao_escolhe() -> None:
     partida = Partida()
     assert await ControladorHumano().escolher(partida, await RAPIDO(partida)) is None
 
 
-def test_criar_controlador_a_partir_da_descricao(servidor):
+def test_criar_controlador_a_partir_da_descricao(servidor: ServidorFalso) -> None:
     cliente = servidor.cliente()
     for original in (
         ControladorMinimax(3),
@@ -75,22 +96,22 @@ def test_criar_controlador_a_partir_da_descricao(servidor):
 # --- Partidas simuladas --------------------------------------------------------
 
 
-async def test_minimax_x_minimax_vai_ate_o_fim_com_rotulos():
-    eventos = []
+async def test_minimax_x_minimax_vai_ate_o_fim_com_rotulos() -> None:
+    eventos: list[tuple[Evento, DadosEvento]] = []
     orq = _orq(
         ControladorMinimax(),
         ControladorMinimax(profundidade=1),
         ouvinte=lambda tipo, dados: eventos.append((tipo, dados)),
     )
-    assert orq.estado == PREPARANDO
+    assert orq.estado == Estado.PREPARANDO
     await orq.rodar(max_lances=400)
-    assert orq.estado == ENCERRADA
+    assert orq.estado == Estado.ENCERRADA
     assert orq.partida.resultado() in ("brancas", "pretas", "empate")
     assert len(orq.lances) == len(orq.partida.historico)
-    assert all(x.rotulo in ROTULOS for x in orq.lances)
+    assert all(isinstance(x.rotulo, Rotulo) for x in orq.lances)
     assert [x.numero for x in orq.lances] == list(range(1, len(orq.lances) + 1))
-    assert eventos[0] == ("estado", {"estado": EM_JOGO, "resultado": None})
-    assert eventos[-1][0] == "estado" and eventos[-1][1]["estado"] == ENCERRADA
+    assert eventos[0] == ("estado", {"estado": Estado.EM_JOGO, "resultado": None})
+    assert eventos[-1][0] == "estado" and eventos[-1][1]["estado"] == Estado.ENCERRADA
     assert sum(1 for tipo, _ in eventos if tipo == "lance") == len(orq.lances)
     # O lado que joga com a analise do juiz so recebe "melhor".
     assert orq.resumo_do_juiz()["brancas"].contagem["melhor"] == sum(
@@ -98,11 +119,11 @@ async def test_minimax_x_minimax_vai_ate_o_fim_com_rotulos():
     )
 
 
-async def test_ca14_llm_x_minimax_ate_o_fim_com_resumo_por_lado(servidor):
+async def test_ca14_llm_x_minimax_ate_o_fim_com_resumo_por_lado(servidor: ServidorFalso) -> None:
     servidor.padrao = _escolhe_primeiro
     orq = _orq(ControladorLLM(servidor.cliente(), "ana-1"), ControladorMinimax())
     await orq.rodar(max_lances=400)
-    assert orq.estado == ENCERRADA
+    assert orq.estado == Estado.ENCERRADA
     resumo = orq.resumo_do_juiz()
     for lado in ("brancas", "pretas"):
         assert resumo[lado].lances > 0
@@ -117,7 +138,7 @@ async def test_ca14_llm_x_minimax_ate_o_fim_com_resumo_por_lado(servidor):
     assert all("minimax" not in servidor.textos_de(i).lower() for i in range(len(servidor.pedidos)))
 
 
-async def test_ca07_llm_x_llm_usa_um_participante_por_lado(servidor):
+async def test_ca07_llm_x_llm_usa_um_participante_por_lado(servidor: ServidorFalso) -> None:
     servidor.padrao = _escolhe_primeiro
     cliente = servidor.cliente()
     orq = _orq(ControladorLLM(cliente, "ana-1"), ControladorLLM(cliente, "bia-1"))
@@ -127,7 +148,7 @@ async def test_ca07_llm_x_llm_usa_um_participante_por_lado(servidor):
     assert set(modelos) == {"ana-1", "bia-1"}
 
 
-async def test_ca10_hub_fora_do_ar_a_partida_continua_com_fallback(servidor):
+async def test_ca10_hub_fora_do_ar_a_partida_continua_com_fallback(servidor: ServidorFalso) -> None:
     servidor.padrao = 503
     orq = _orq(ControladorLLM(servidor.cliente(), "ana-1"), ControladorMinimax())
     await orq.rodar(max_lances=10)
@@ -141,23 +162,23 @@ async def test_ca10_hub_fora_do_ar_a_partida_continua_com_fallback(servidor):
 # --- Controle ------------------------------------------------------------------
 
 
-async def test_pausar_retomar_e_encerrar():
+async def test_pausar_retomar_e_encerrar() -> None:
     orq = _orq(ControladorMinimax(), ControladorMinimax())
     orq.iniciar()
     orq.pausar()
-    assert orq.estado == PAUSADA
+    assert orq.estado == Estado.PAUSADA
     assert await orq.passo() is None
     assert orq.lances == []
     orq.retomar()
-    assert orq.estado == EM_JOGO
+    assert orq.estado == Estado.EM_JOGO
     assert await orq.passo() is not None
     orq.encerrar(empate=True)
-    assert orq.estado == ENCERRADA
+    assert orq.estado == Estado.ENCERRADA
     assert orq.partida.resultado() == "empate"
     assert await orq.passo() is None
 
 
-async def test_desfazer_no_orquestrador():
+async def test_desfazer_no_orquestrador() -> None:
     orq = _orq(ControladorMinimax(), ControladorMinimax())
     await orq.rodar(max_lances=3)
     orq.desfazer()
@@ -165,18 +186,18 @@ async def test_desfazer_no_orquestrador():
     assert orq.partida.vez == BRANCA
 
 
-async def test_partida_ja_encerrada_ao_iniciar():
+async def test_partida_ja_encerrada_ao_iniciar() -> None:
     orq = _orq(ControladorMinimax(), ControladorMinimax(), partida=Partida(tab=montar({"a1": "b"})))
     orq.partida.vez = PRETA
     orq.iniciar()
-    assert orq.estado == ENCERRADA
+    assert orq.estado == Estado.ENCERRADA
 
 
 # --- Tabuleiro fisico e humanos ------------------------------------------------
 
 
-async def test_fora_do_modo_simulado_o_lance_da_ia_fica_pendente():
-    eventos = []
+async def test_fora_do_modo_simulado_o_lance_da_ia_fica_pendente() -> None:
+    eventos: list[Evento] = []
     orq = _orq(
         ControladorMinimax(),
         ControladorMinimax(),
@@ -185,7 +206,7 @@ async def test_fora_do_modo_simulado_o_lance_da_ia_fica_pendente():
     )
     orq.iniciar()
     assert await orq.passo() is None
-    assert orq.estado == AGUARDANDO_EXECUCAO
+    assert orq.estado == Estado.AGUARDANDO_EXECUCAO
     assert orq.lances == [] and orq.pendente is not None
     assert "lance_pendente" in eventos
     assert await orq.passo() is None  # nao pede outro lance enquanto aguarda
@@ -193,31 +214,33 @@ async def test_fora_do_modo_simulado_o_lance_da_ia_fica_pendente():
     outro = next(x for x in orq.partida.lances_legais() if x != orq.pendente.lance)
     with pytest.raises(LanceIlegal):
         await orq.confirmar_execucao(outro)
-    assert orq.estado == AGUARDANDO_EXECUCAO
+    assert orq.estado == Estado.AGUARDANDO_EXECUCAO
 
     jogado = await orq.confirmar_execucao(orq.pendente.lance)
     assert jogado.origem in ("minimax", "unico") and jogado.rotulo == "melhor"
-    assert orq.estado == EM_JOGO and orq.pendente is None
+    assert orq.estado == Estado.EM_JOGO and orq.pendente is None
 
 
-async def test_lance_humano_e_validado_e_julgado():
+async def test_lance_humano_e_validado_e_julgado() -> None:
     orq = _orq(ControladorHumano(), ControladorMinimax())
     orq.iniciar()
     assert await orq.passo() is None  # humano: nada acontece sozinho
-    assert orq.estado == EM_JOGO
+    assert orq.estado == Estado.EM_JOGO
     jogado = await orq.lance_humano(orq.partida.lance_de_texto("c3-d4"))
-    assert jogado.origem == "humano" and jogado.rotulo in ROTULOS
+    assert jogado.origem == "humano" and isinstance(jogado.rotulo, Rotulo)
     with pytest.raises(LanceIlegal):  # agora e a vez do Minimax
         await orq.lance_humano(orq.partida.lances_legais()[0])
 
 
-async def test_modo_assistido_sugere_so_na_vez_do_assistido_com_analise(servidor):
+async def test_modo_assistido_sugere_so_na_vez_do_assistido_com_analise(
+    servidor: ServidorFalso,
+) -> None:
     servidor.padrao = _escolhe_primeiro
-    eventos = []
+    eventos: list[tuple[Evento, DadosEvento]] = []
     orq = _orq(
         ControladorHumano(),
         ControladorHumano(),
-        modo="assistido",
+        modo=Modo.ASSISTIDO,
         simulado=False,
         conselheiro=ControladorLLM(servidor.cliente(), "ana-1", com_analise=True),
         cor_assistida=BRANCA,
@@ -240,7 +263,7 @@ async def test_modo_assistido_sugere_so_na_vez_do_assistido_com_analise(servidor
 # --- Persistencia --------------------------------------------------------------
 
 
-async def test_salvar_recarregar_e_continuar(tmp_path, servidor):
+async def test_salvar_recarregar_e_continuar(tmp_path: Path, servidor: ServidorFalso) -> None:
     servidor.padrao = _escolhe_primeiro
     cliente = servidor.cliente()
     orq = _orq(ControladorLLM(cliente, "ana-1"), ControladorMinimax(profundidade=1))
@@ -273,7 +296,7 @@ async def test_salvar_recarregar_e_continuar(tmp_path, servidor):
     assert continuada.lances[-1].numero == 10
 
 
-def test_arquivo_de_versao_desconhecida_e_recusado(tmp_path):
+def test_arquivo_de_versao_desconhecida_e_recusado(tmp_path: Path) -> None:
     arquivo = tmp_path / "x.json"
     arquivo.write_text('{"versao": 99}', "utf-8")
     with pytest.raises(ValueError):

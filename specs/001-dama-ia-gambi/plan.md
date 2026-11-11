@@ -48,7 +48,6 @@ dama-ia-gambi/
 ├── docs/                      # constituicao.md, adr/
 ├── specs/001-dama-ia-gambi/   # spec.md, plan.md, tasks.md
 ├── src/dama/
-│   ├── __init__.py
 │   ├── cli.py                 # typer: serve, simular, checar-gambi
 │   ├── config.py              # Settings (pydantic-settings)
 │   ├── regras/                # puro, sem I/O

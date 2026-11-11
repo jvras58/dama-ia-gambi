@@ -1,63 +1,83 @@
 """Funcao de avaliacao estatica, em centesimos de pedra.
 
 Considera material, avanco das pedras, controle do centro, mobilidade e pecas ameacadas.
-O resultado e sempre do ponto de vista do lado da vez.
+O resultado e sempre do ponto de vista do lado da vez. Os pesos vem da configuracao
+(`DAMA_AVALIACAO_*`).
 """
 
-from ..regras.tabuleiro import COLUNA, FRENTE, LINHA, N_CASAS, RAIOS
-from ..regras.tipos import BRANCA, PEDRA, PRETA, Tabuleiro
+from typing import Final
 
-VALOR_PEDRA = 100
-VALOR_DAMA = 300
-PESO_AVANCO = 3  # por fileira avancada
-PESO_CENTRO = 5  # pedra numa casa central
-PESO_MOBILIDADE = 2  # por movimento simples disponivel
-PESO_AMEACA = 15  # por peca que o adversario pode capturar com um salto curto
-PESO_ULTIMA_FILEIRA = 6  # pedra guardando a propria primeira fileira
+from dama.config import Settings, obter_config
+from dama.regras.tabuleiro import (
+    COLUNA,
+    DIRECOES,
+    FRENTE,
+    LADO,
+    LINHA,
+    LINHA_DE_BASE,
+    N_CASAS,
+    RAIOS,
+    ULTIMA_LINHA,
+)
+from dama.regras.tipos import BRANCA, PEDRA, PRETA, VAZIA, Casa, Cor, Tabuleiro
 
-_CENTRO = frozenset(i for i in range(N_CASAS) if 2 <= COLUNA[i] <= 5 and 2 <= LINHA[i] <= 5)
-# Pares (direcao do atacante, direcao do pouso): o pouso fica do lado oposto ao atacante.
-_OPOSTA = (3, 2, 1, 0)
+# Casas centrais: fora das duas linhas e colunas de cada borda.
+_BORDA: Final[int] = 2
+_CENTRO: Final[frozenset[Casa]] = frozenset(
+    i
+    for i in range(N_CASAS)
+    if _BORDA <= COLUNA[i] < LADO - _BORDA and _BORDA <= LINHA[i] < LADO - _BORDA
+)
+# Para cada direcao em DIRECOES, o indice da direcao contraria.
+_OPOSTA: Final[tuple[int, ...]] = tuple(DIRECOES.index((-dl, -dc)) for dl, dc in DIRECOES)
 
 
-def _lado(tab: Tabuleiro, cor: int) -> int:
+def _lado(tab: Tabuleiro, cor: Cor, config: Settings) -> int:
     """Pontuacao de um lado, sem descontar a do outro."""
+    valor_pedra = config.avaliacao_valor_pedra
+    valor_dama = config.avaliacao_valor_dama
+    peso_avanco = config.avaliacao_peso_avanco
+    peso_centro = config.avaliacao_peso_centro
+    peso_mobilidade = config.avaliacao_peso_mobilidade
+    peso_ameaca = config.avaliacao_peso_ameaca
+    peso_ultima_fileira = config.avaliacao_peso_ultima_fileira
+
     total = 0
     frente = FRENTE[cor]
-    base = 0 if cor == BRANCA else 7
+    base = LINHA_DE_BASE[cor]
     for i in range(N_CASAS):
         peca = tab[i] * cor
         if peca <= 0:
             continue
         raios = RAIOS[i]
         if peca == PEDRA:
-            avanco = LINHA[i] if cor == BRANCA else 7 - LINHA[i]
-            total += VALOR_PEDRA + PESO_AVANCO * avanco
+            avanco = LINHA[i] if cor == BRANCA else ULTIMA_LINHA - LINHA[i]
+            total += valor_pedra + peso_avanco * avanco
             if i in _CENTRO:
-                total += PESO_CENTRO
+                total += peso_centro
             if LINHA[i] == base:
-                total += PESO_ULTIMA_FILEIRA
+                total += peso_ultima_fileira
             for d in frente:
                 raio = raios[d]
-                if raio and tab[raio[0]] == 0:
-                    total += PESO_MOBILIDADE
+                if raio and tab[raio[0]] == VAZIA:
+                    total += peso_mobilidade
         else:
-            total += VALOR_DAMA
+            total += valor_dama
             for raio in raios:
                 for alvo in raio:
-                    if tab[alvo] != 0:
+                    if tab[alvo] != VAZIA:
                         break
-                    total += PESO_MOBILIDADE
+                    total += peso_mobilidade
         # Ameacada: inimigo encostado numa diagonal e casa vazia do lado oposto.
-        for d in range(4):
-            raio = raios[d]
+        for d, raio in enumerate(raios):
             oposto = raios[_OPOSTA[d]]
-            if raio and oposto and tab[raio[0]] * cor < 0 and tab[oposto[0]] == 0:
-                total -= PESO_AMEACA
+            if raio and oposto and tab[raio[0]] * cor < 0 and tab[oposto[0]] == VAZIA:
+                total -= peso_ameaca
                 break
     return total
 
 
-def avaliar(tab: Tabuleiro, vez: int) -> int:
+def avaliar(tab: Tabuleiro, vez: Cor) -> int:
     """Pontuacao da posicao para o lado `vez` (positivo = bom para quem joga)."""
-    return (_lado(tab, BRANCA) - _lado(tab, PRETA)) * (1 if vez == BRANCA else -1)
+    config = obter_config()
+    return (_lado(tab, BRANCA, config) - _lado(tab, PRETA, config)) * vez

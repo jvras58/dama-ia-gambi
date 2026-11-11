@@ -11,14 +11,16 @@ Com o roteiro vazio, usa `padrao`.
 import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Any
 
-import httpx
+import httpx2
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from dama.llm.cliente import ClienteGambi
 
-Passo = str | int | tuple | Callable[[str], str]
+type Json = dict[str, Any]
+type Passo = str | int | tuple[str, float] | Callable[[str], str]
 
 
 @dataclass
@@ -28,14 +30,14 @@ class ServidorFalso:
     participantes: list[str] = field(default_factory=lambda: ["ana-1", "bia-1"])
     sem_responses: bool = False
     sala: str = "ABC123"
-    pedidos: list[dict] = field(default_factory=list)  # tudo o que chegou, para inspecao
+    pedidos: list[Json] = field(default_factory=list)  # tudo o que chegou, para inspecao
 
     def app(self) -> FastAPI:
         app = FastAPI()
         prefixo = "/rooms/{sala}/v1"
 
-        @app.get(prefixo + "/models")
-        async def modelos(sala: str):
+        @app.get(prefixo + "/models", response_model=None)
+        async def modelos(sala: str) -> Json | JSONResponse:
             if sala != self.sala:
                 return JSONResponse({"error": "room not found"}, status_code=404)
             return {
@@ -46,8 +48,8 @@ class ServidorFalso:
                 ],
             }
 
-        @app.post(prefixo + "/responses")
-        async def responses(sala: str, pedido: Request):
+        @app.post(prefixo + "/responses", response_model=None)
+        async def responses(sala: str, pedido: Request) -> Json | JSONResponse:
             corpo = await pedido.json()
             if self.sem_responses:
                 return JSONResponse({"error": "not found"}, status_code=404)
@@ -76,8 +78,8 @@ class ServidorFalso:
                 ],
             }
 
-        @app.post(prefixo + "/chat/completions")
-        async def chat(sala: str, pedido: Request):
+        @app.post(prefixo + "/chat/completions", response_model=None)
+        async def chat(sala: str, pedido: Request) -> Json | JSONResponse:
             corpo = await pedido.json()
             self.pedidos.append({"rota": "chat", **corpo})
             ultimo = corpo["messages"][-1]["content"]
@@ -115,7 +117,7 @@ class ServidorFalso:
 
     def cliente(self, timeout_s: float = 5.0, sala: str | None = None) -> ClienteGambi:
         """ClienteGambi ligado a este servidor, sem abrir porta de rede."""
-        http = httpx.AsyncClient(transport=httpx.ASGITransport(app=self.app()))
+        http = httpx2.AsyncClient(transport=httpx2.ASGITransport(app=self.app()))
         return ClienteGambi("http://falso", sala or self.sala, timeout_s, http_client=http)
 
     def textos_de(self, indice: int = -1) -> str:

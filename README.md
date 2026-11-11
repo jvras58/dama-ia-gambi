@@ -12,6 +12,20 @@ uv run pytest
 uv run dama --help
 ```
 
+Antes de entregar uma mudança, os três precisam passar:
+
+```bash
+uv run pytest
+```
+
+```bash
+uv run ruff check .
+```
+
+```bash
+uv run mypy
+```
+
 Partida só com o Minimax, sem precisar do Gambi:
 
 ```bash
@@ -48,6 +62,15 @@ O projeto segue desenvolvimento orientado a especificação (SDD).
 | [specs/001-dama-ia-gambi/tasks.md](specs/001-dama-ia-gambi/tasks.md) | Tarefas ordenadas, com critério de pronto. |
 | `tests/fixtures/` | Imagens de referência do tabuleiro real. |
 
+## Convenções de código
+
+Registradas no [ADR 0009](docs/adr/0009-convencoes-de-codigo.md):
+
+- Sem `__init__.py`; `dama` é um pacote de namespace.
+- Imports sempre completos (`from dama.regras.tipos import Lance`), nunca relativos.
+- Todo valor ajustável fica em `Settings` ([src/dama/config.py](src/dama/config.py)) e pode ser trocado por variável `DAMA_*` ou pelo `.env`.
+- Vocabulários fechados são enums; funções são todas anotadas e o `mypy --strict` passa em `src/`.
+
 ## Fluxo de trabalho
 
 1. Nova funcionalidade: criar `specs/NNN-nome/` e escrever `spec.md`, depois `plan.md`, depois `tasks.md`.
@@ -65,8 +88,11 @@ specs/
   001-dama-ia-gambi/
     spec.md  plan.md  tasks.md
 src/dama/
+  config.py                       toda a configuração (Settings)
+  cli.py
   regras/  minimax/  llm/  jogo/    prontos
-  visao/  web/                    a implementar
+  visao/  web/                    a criar no M3 e M4
 tests/
+  apoio/                          servidor Gambi falso
   fixtures/
 ```

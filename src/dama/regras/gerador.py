@@ -6,11 +6,11 @@
 - Pecas capturadas so saem do tabuleiro ao fim do lance e nao podem ser saltadas duas vezes.
 """
 
-from .tabuleiro import FRENTE, LINHA, N_CASAS, RAIOS
-from .tipos import BRANCA, DAMA, PEDRA, Lance, Tabuleiro, cor_de
+from dama.regras.tabuleiro import FRENTE, LINHA, LINHA_DE_PROMOCAO, N_CASAS, RAIOS, ULTIMA_LINHA
+from dama.regras.tipos import DAMA, PEDRA, VAZIA, Casa, Cor, Lance, Tabuleiro, cor_de
 
 
-def gerar_lances(tab: Tabuleiro, vez: int) -> list[Lance]:
+def gerar_lances(tab: Tabuleiro, vez: Cor) -> list[Lance]:
     """Todos os lances legais do lado `vez`, em ordem estavel."""
     capturas = _gerar_capturas(tab, vez)
     if capturas:
@@ -19,8 +19,8 @@ def gerar_lances(tab: Tabuleiro, vez: int) -> list[Lance]:
     return _gerar_simples(tab, vez)
 
 
-def _gerar_simples(tab: Tabuleiro, vez: int) -> list[Lance]:
-    lances = []
+def _gerar_simples(tab: Tabuleiro, vez: Cor) -> list[Lance]:
+    lances: list[Lance] = []
     frente = FRENTE[vez]
     for i in range(N_CASAS):
         peca = tab[i]
@@ -30,18 +30,18 @@ def _gerar_simples(tab: Tabuleiro, vez: int) -> list[Lance]:
         if peca * vez == PEDRA:
             for d in frente:
                 raio = raios[d]
-                if raio and tab[raio[0]] == 0:
+                if raio and tab[raio[0]] == VAZIA:
                     lances.append(Lance(i, (raio[0],)))
         else:
             for raio in raios:
                 for alvo in raio:
-                    if tab[alvo] != 0:
+                    if tab[alvo] != VAZIA:
                         break
                     lances.append(Lance(i, (alvo,)))
     return lances
 
 
-def _gerar_capturas(tab: Tabuleiro, vez: int) -> list[Lance]:
+def _gerar_capturas(tab: Tabuleiro, vez: Cor) -> list[Lance]:
     lances: list[Lance] = []
     for i in range(N_CASAS):
         peca = tab[i]
@@ -56,11 +56,11 @@ def _gerar_capturas(tab: Tabuleiro, vez: int) -> list[Lance]:
 
 def _capturas_pedra(
     tab: Tabuleiro,
-    vez: int,
-    origem: int,
-    pos: int,
-    caminho: tuple[int, ...],
-    capturadas: tuple[int, ...],
+    vez: Cor,
+    origem: Casa,
+    pos: Casa,
+    caminho: tuple[Casa, ...],
+    capturadas: tuple[Casa, ...],
     saida: list[Lance],
 ) -> None:
     continuou = False
@@ -71,7 +71,7 @@ def _capturas_pedra(
         if tab[alvo] * vez >= 0 or alvo in capturadas:
             continue
         # A casa de origem conta como vazia: a peca ja saiu de la.
-        if tab[pouso] != 0 and pouso != origem:
+        if tab[pouso] != VAZIA and pouso != origem:
             continue
         continuou = True
         _capturas_pedra(tab, vez, origem, pouso, (*caminho, pouso), (*capturadas, alvo), saida)
@@ -81,18 +81,18 @@ def _capturas_pedra(
 
 def _capturas_dama(
     tab: Tabuleiro,
-    vez: int,
-    origem: int,
-    pos: int,
-    caminho: tuple[int, ...],
-    capturadas: tuple[int, ...],
+    vez: Cor,
+    origem: Casa,
+    pos: Casa,
+    caminho: tuple[Casa, ...],
+    capturadas: tuple[Casa, ...],
     saida: list[Lance],
 ) -> None:
     continuou = False
     for raio in RAIOS[pos]:
         alvo = -1
         for k, c in enumerate(raio):
-            if tab[c] == 0 or c == origem:
+            if tab[c] == VAZIA or c == origem:
                 continue
             # Primeira peca no caminho: so serve se for inimiga ainda nao capturada.
             if tab[c] * vez < 0 and c not in capturadas:
@@ -101,7 +101,7 @@ def _capturas_dama(
         if alvo < 0:
             continue
         for pouso in raio[alvo + 1 :]:
-            if tab[pouso] != 0 and pouso != origem:
+            if tab[pouso] != VAZIA and pouso != origem:
                 break
             continuou = True
             _capturas_dama(
@@ -115,11 +115,11 @@ def aplicar(tab: Tabuleiro, lance: Lance) -> Tabuleiro:
     """Devolve o tabuleiro depois do lance. Nao verifica se o lance e legal."""
     novo = list(tab)
     peca = novo[lance.origem]
-    novo[lance.origem] = 0
+    novo[lance.origem] = VAZIA
     for c in lance.capturas:
-        novo[c] = 0
+        novo[c] = VAZIA
     destino = lance.destino
-    if peca == PEDRA and LINHA[destino] == 7:
+    if peca == PEDRA and LINHA[destino] == ULTIMA_LINHA:
         peca = DAMA
     elif peca == -PEDRA and LINHA[destino] == 0:
         peca = -DAMA
@@ -130,5 +130,6 @@ def aplicar(tab: Tabuleiro, lance: Lance) -> Tabuleiro:
 def promove(tab: Tabuleiro, lance: Lance) -> bool:
     """O lance termina com uma pedra virando dama?"""
     peca = tab[lance.origem]
-    ultima = 7 if cor_de(peca) == BRANCA else 0
-    return abs(peca) == PEDRA and LINHA[lance.destino] == ultima
+    if abs(peca) != PEDRA:
+        return False
+    return LINHA[lance.destino] == LINHA_DE_PROMOCAO[cor_de(peca)]

@@ -38,15 +38,15 @@ LEGAIS = ["a3-b4", "c3-b4", "c3-d4", "e3-d4", "e3-f4", "g3-f4", "g3-h4"]
         ("A nota e 0.35, entao tanto faz.", None),
     ],
 )
-def test_extrair_lance(texto, esperado):
+def test_extrair_lance(texto: str, esperado: int | None) -> None:
     assert extrair_lance(texto, LEGAIS) == esperado
 
 
-def test_captura_em_notacao_com_varias_casas():
+def test_captura_em_notacao_com_varias_casas() -> None:
     assert extrair_lance("jogo c3xe5xg7", ["a1-b2", "c3xe5xg7"]) == 1
 
 
-def test_extrair_motivo():
+def test_extrair_motivo() -> None:
     assert extrair_motivo("LANCE: 3\nMOTIVO: controla o centro.\nextra") == "controla o centro."
     assert extrair_motivo("LANCE: 3") == ""
 
@@ -54,7 +54,7 @@ def test_extrair_motivo():
 # --- Prompt --------------------------------------------------------------------
 
 
-def test_pedido_sem_analise_lista_todos_os_lances_e_nao_cita_minimax():
+def test_pedido_sem_analise_lista_todos_os_lances_e_nao_cita_minimax() -> None:
     partida = Partida()
     lances = partida.lances_legais()
     pedido = montar_pedido(partida, lances)
@@ -66,7 +66,7 @@ def test_pedido_sem_analise_lista_todos_os_lances_e_nao_cita_minimax():
     assert "8   p   p   p   p" in pedido
 
 
-def test_pedido_com_analise_traz_nota_rotulo_e_continuacao():
+def test_pedido_com_analise_traz_nota_rotulo_e_continuacao() -> None:
     partida = Partida()
     lances = partida.lances_legais()
     analise = analisar(partida.tab, partida.vez, profundidade=3)
@@ -79,7 +79,7 @@ def test_pedido_com_analise_traz_nota_rotulo_e_continuacao():
     assert "Minimax" in instrucoes(True)
 
 
-def test_pedido_para_as_pretas_e_ultimos_lances():
+def test_pedido_para_as_pretas_e_ultimos_lances() -> None:
     partida = Partida()
     partida.jogar_texto("c3-d4")
     pedido = montar_pedido(partida, partida.lances_legais())
@@ -89,5 +89,5 @@ def test_pedido_para_as_pretas_e_ultimos_lances():
     assert partida.vez == PRETA
 
 
-def test_correcao_cita_o_intervalo():
+def test_correcao_cita_o_intervalo() -> None:
     assert "de 1 a 7" in montar_correcao(7)

@@ -14,6 +14,7 @@ Cada ADR registra **uma** decisão que seria cara de reverter, com o contexto e 
 | [0006](0006-regras-damas-brasileiras.md) | Regras de damas brasileiras | Aceito |
 | [0007](0007-llm-escolhe-lance-por-indice-via-gambi.md) | LLM via Gambi escolhe o lance por índice numa lista de lances legais | Aceito |
 | [0008](0008-papeis-do-minimax.md) | Minimax como juiz, fallback, jogador e analista | Aceito |
+| [0009](0009-convencoes-de-codigo.md) | Convenções de código: sem `__init__.py`, valores em `Settings`, tipagem forte, imports completos | Aceito |
 
 ## Como criar um ADR
 

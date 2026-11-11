@@ -1,1 +1,0 @@
-"""Visao computacional do tabuleiro."""

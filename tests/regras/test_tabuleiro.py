@@ -15,25 +15,25 @@ from dama.regras.tabuleiro import (
 from dama.regras.tipos import PEDRA, Lance
 
 
-def test_a1_e_casa_escura_de_indice_zero():
+def test_a1_e_casa_escura_de_indice_zero() -> None:
     assert casa("a1") == 0
     assert casa("h8") == 31
     assert nome_casa(0) == "a1"
 
 
-def test_notacao_de_casa_ida_e_volta():
+def test_notacao_de_casa_ida_e_volta() -> None:
     for i in range(32):
         assert casa(nome_casa(i)) == i
         assert indice(*linha_coluna(i)) == i
 
 
 @pytest.mark.parametrize("nome", ["a2", "h1", "i1", "a9", "", "abc"])
-def test_casa_clara_ou_invalida_e_recusada(nome):
+def test_casa_clara_ou_invalida_e_recusada(nome: str) -> None:
     with pytest.raises(ValueError):
         casa(nome)
 
 
-def test_posicao_inicial():
+def test_posicao_inicial() -> None:
     tab = posicao_inicial()
     assert sum(1 for p in tab if p == PEDRA) == 12
     assert sum(1 for p in tab if p == -PEDRA) == 12
@@ -42,20 +42,20 @@ def test_posicao_inicial():
     assert all(tab[casa(c)] == 0 for c in ("b4", "d4", "f4", "h4", "a5", "c5", "e5", "g5"))
 
 
-def test_raios_da_grande_diagonal():
+def test_raios_da_grande_diagonal() -> None:
     assert [nome_casa(c) for c in RAIOS[casa("a1")][0]] == [
         "b2", "c3", "d4", "e5", "f6", "g7", "h8",
     ]  # fmt: skip
     assert RAIOS[casa("a1")][1] == ()
 
 
-def test_notacao_de_lance():
+def test_notacao_de_lance() -> None:
     assert notacao(Lance(casa("c3"), (casa("d4"),))) == "c3-d4"
     captura = Lance(casa("c3"), (casa("e5"), casa("g7")), (casa("d4"), casa("f6")))
     assert notacao(captura) == "c3xe5xg7"
 
 
-def test_texto_do_tabuleiro():
+def test_texto_do_tabuleiro() -> None:
     texto = para_texto(montar({"a1": "b", "h8": "P"}))
     linhas = texto.splitlines()
     assert linhas[0].startswith("8")
@@ -64,7 +64,7 @@ def test_texto_do_tabuleiro():
     assert linhas[8].split() == list("abcdefgh")
 
 
-def test_espelhar_duas_vezes_volta_ao_original():
+def test_espelhar_duas_vezes_volta_ao_original() -> None:
     tab = montar({"c3": "b", "e5": "P", "h2": "B"})
     assert espelhar(espelhar(tab)) == tab
     assert espelhar(posicao_inicial()) == posicao_inicial()

@@ -10,34 +10,87 @@ No modo simulado, o lance de uma IA e aplicado na hora. Fora dele, fica pendente
 """
 
 import asyncio
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from concurrent.futures import Executor
 from dataclasses import dataclass, field
+from enum import StrEnum
+from typing import Self, TypedDict
 
-from ..llm.jogador import Decisao
-from ..minimax.analise import AnalisePosicao, ResumoLado, analisar, resumir
-from ..regras.partida import LanceIlegal, Partida
-from ..regras.tabuleiro import notacao
-from ..regras.tipos import BRANCA, NOME_COR, PRETA, Lance
-from .controladores import TIPO_HUMANO, Controlador
+from dama.jogo.controladores import Controlador, TipoControlador
+from dama.llm.jogador import Decisao, Origem, RegistroLLMDict
+from dama.minimax.analise import (
+    AnalisePosicao,
+    Julgamento,
+    ResumoLado,
+    Rotulo,
+    analisar,
+    resumir,
+)
+from dama.regras.partida import LanceIlegal, Partida
+from dama.regras.tabuleiro import notacao
+from dama.regras.tipos import COR_DO_LADO, CORES, NOME_COR, Cor, Lado, Lance, Resultado
 
-PREPARANDO = "preparando"
-EM_JOGO = "em_jogo"
-AGUARDANDO_EXECUCAO = "aguardando_execucao"
-PAUSADA = "pausada"
-ENCERRADA = "encerrada"
 
-ORIGEM_HUMANO = "humano"
+class Estado(StrEnum):
+    PREPARANDO = "preparando"
+    EM_JOGO = "em_jogo"
+    AGUARDANDO_EXECUCAO = "aguardando_execucao"
+    PAUSADA = "pausada"
+    ENCERRADA = "encerrada"
 
-MODO_IA_X_IA = "ia_x_ia"
-MODO_ASSISTIDO = "assistido"
 
-Analisador = Callable[[Partida], Awaitable[AnalisePosicao]]
-Ouvinte = Callable[[str, dict], None]
+class Modo(StrEnum):
+    IA_X_IA = "ia_x_ia"
+    ASSISTIDO = "assistido"
+
+
+class Evento(StrEnum):
+    """Tipos de aviso que o orquestrador manda ao ouvinte."""
+
+    ESTADO = "estado"
+    LANCE = "lance"
+    LANCE_PENDENTE = "lance_pendente"
+    SUGESTAO = "sugestao"
+
+
+class LanceJogadoDict(TypedDict):
+    numero: int
+    cor: Lado
+    lance: str
+    origem: Origem
+    motivo: str
+    rotulo: Rotulo | None
+    pontuacao: int
+    perda: int
+    registro_llm: RegistroLLMDict | None
+
+
+class DadosEstado(TypedDict):
+    estado: Estado
+    resultado: Resultado | None
+
+
+class DadosLancePendente(TypedDict):
+    cor: Lado
+    lance: str
+    origem: Origem
+    motivo: str
+
+
+class DadosSugestao(TypedDict):
+    lance: str
+    origem: Origem
+    motivo: str
+    minimax: str
+
+
+type DadosEvento = LanceJogadoDict | DadosEstado | DadosLancePendente | DadosSugestao
+type Analisador = Callable[[Partida], Awaitable[AnalisePosicao]]
+type Ouvinte = Callable[[Evento, DadosEvento], None]
 
 
 def criar_analisador(
-    profundidade: int = 8, tempo_s: float | None = 1.0, executor: Executor | None = None
+    profundidade: int, tempo_s: float | None, executor: Executor | None = None
 ) -> Analisador:
     """Analisador que roda o Minimax fora do laco de eventos.
 
@@ -57,16 +110,16 @@ def criar_analisador(
 @dataclass
 class LanceJogado:
     numero: int
-    cor: int
+    cor: Cor
     texto: str
-    origem: str  # llm | fallback | unico | minimax | humano
+    origem: Origem
     motivo: str
-    rotulo: str
+    rotulo: Rotulo | None  # None se o lance nao foi analisado pelo juiz
     pontuacao: int
     perda: int
-    registro_llm: dict | None = None
+    registro_llm: RegistroLLMDict | None = None
 
-    def para_dict(self) -> dict:
+    def para_dict(self) -> LanceJogadoDict:
         return {
             "numero": self.numero,
             "cor": NOME_COR[self.cor],
@@ -80,14 +133,15 @@ class LanceJogado:
         }
 
     @classmethod
-    def de_dict(cls, dados: dict) -> "LanceJogado":
+    def de_dict(cls, dados: LanceJogadoDict) -> Self:
+        rotulo = dados["rotulo"]
         return cls(
             numero=dados["numero"],
-            cor=BRANCA if dados["cor"] == NOME_COR[BRANCA] else PRETA,
+            cor=COR_DO_LADO[Lado(dados["cor"])],
             texto=dados["lance"],
-            origem=dados["origem"],
+            origem=Origem(dados["origem"]),
             motivo=dados["motivo"],
-            rotulo=dados["rotulo"],
+            rotulo=Rotulo(rotulo) if rotulo else None,
             pontuacao=dados["pontuacao"],
             perda=dados["perda"],
             registro_llm=dados.get("registro_llm"),
@@ -97,39 +151,39 @@ class LanceJogado:
 @dataclass
 class Orquestrador:
     partida: Partida
-    controladores: dict[int, Controlador]
+    controladores: Mapping[Cor, Controlador]
     analisador: Analisador
-    modo: str = MODO_IA_X_IA
+    modo: Modo = Modo.IA_X_IA
     simulado: bool = True
     conselheiro: Controlador | None = None  # modo assistido: sugere lances
-    cor_assistida: int | None = None
+    cor_assistida: Cor | None = None
     ouvinte: Ouvinte | None = None
     lances: list[LanceJogado] = field(default_factory=list)
-    estado: str = PREPARANDO
+    estado: Estado = Estado.PREPARANDO
     pendente: Decisao | None = None
     _analise: AnalisePosicao | None = field(default=None, repr=False)
-    _estado_antes_da_pausa: str = field(default=EM_JOGO, repr=False)
+    _estado_antes_da_pausa: Estado = field(default=Estado.EM_JOGO, repr=False)
 
     # --- Controle ------------------------------------------------------------
 
     def iniciar(self) -> None:
-        if self.estado == PREPARANDO:
-            self._mudar_estado(ENCERRADA if self.partida.encerrada() else EM_JOGO)
+        if self.estado is Estado.PREPARANDO:
+            self._mudar_estado(Estado.ENCERRADA if self.partida.encerrada() else Estado.EM_JOGO)
 
     def pausar(self) -> None:
-        if self.estado in (EM_JOGO, AGUARDANDO_EXECUCAO):
+        if self.estado in (Estado.EM_JOGO, Estado.AGUARDANDO_EXECUCAO):
             self._estado_antes_da_pausa = self.estado
-            self._mudar_estado(PAUSADA)
+            self._mudar_estado(Estado.PAUSADA)
 
     def retomar(self) -> None:
-        if self.estado == PAUSADA:
+        if self.estado is Estado.PAUSADA:
             self._mudar_estado(self._estado_antes_da_pausa)
 
     def encerrar(self, empate: bool = False) -> None:
         if empate:
             self.partida.empate_por_acordo = True
         self.pendente = None
-        self._mudar_estado(ENCERRADA)
+        self._mudar_estado(Estado.ENCERRADA)
 
     # --- Turno ---------------------------------------------------------------
 
@@ -144,19 +198,20 @@ class Orquestrador:
 
         Nao faz nada se a partida nao esta em jogo ou se o lado da vez e humano.
         """
-        if self.estado != EM_JOGO:
+        if self.estado is not Estado.EM_JOGO:
             return None
         controlador = self.controladores[self.partida.vez]
         analise = await self.analise_atual()
         decisao = await controlador.escolher(self.partida, analise)
-        if decisao is None or self.estado != EM_JOGO:
+        # O estado pode ter mudado (pausa, encerramento) enquanto o controlador pensava.
+        if decisao is None or not self._em_jogo():
             return None
         if self.simulado:
             return self._aplicar(decisao.lance, decisao)
         self.pendente = decisao
-        self._mudar_estado(AGUARDANDO_EXECUCAO)
+        self._mudar_estado(Estado.AGUARDANDO_EXECUCAO)
         self._emitir(
-            "lance_pendente",
+            Evento.LANCE_PENDENTE,
             {
                 "cor": NOME_COR[self.partida.vez],
                 "lance": notacao(decisao.lance),
@@ -168,22 +223,22 @@ class Orquestrador:
 
     async def confirmar_execucao(self, lance: Lance) -> LanceJogado:
         """O tabuleiro fisico mostra `lance`; so vale se for o lance pendente."""
-        if self.estado != AGUARDANDO_EXECUCAO or self.pendente is None:
+        if self.estado is not Estado.AGUARDANDO_EXECUCAO or self.pendente is None:
             raise LanceIlegal("nao ha lance pendente de execucao")
         if lance != self.pendente.lance:
             raise LanceIlegal(
                 f"esperado {notacao(self.pendente.lance)}, executado {notacao(lance)}"
             )
         decisao, self.pendente = self.pendente, None
-        self.estado = EM_JOGO
+        self.estado = Estado.EM_JOGO
         await self.analise_atual()
         return self._aplicar(lance, decisao)
 
     async def lance_humano(self, lance: Lance) -> LanceJogado:
         """Lance vindo de fora (camera ou interface) para um lado humano."""
-        if self.estado != EM_JOGO:
+        if self.estado is not Estado.EM_JOGO:
             raise LanceIlegal(f"a partida nao esta em jogo ({self.estado})")
-        if self.controladores[self.partida.vez].tipo != TIPO_HUMANO:
+        if self.controladores[self.partida.vez].tipo is not TipoControlador.HUMANO:
             raise LanceIlegal(f"o lado das {NOME_COR[self.partida.vez]} nao e humano")
         if lance not in self.partida.lances_legais():
             raise LanceIlegal(f"lance ilegal: {notacao(lance)}")
@@ -194,7 +249,7 @@ class Orquestrador:
         """Sugestao do conselheiro para o jogador assistido, se for a vez dele."""
         if (
             self.conselheiro is None
-            or self.estado != EM_JOGO
+            or self.estado is not Estado.EM_JOGO
             or self.partida.vez != self.cor_assistida
         ):
             return None
@@ -203,7 +258,7 @@ class Orquestrador:
         if decisao is not None:
             item = analise.de(decisao.lance)
             self._emitir(
-                "sugestao",
+                Evento.SUGESTAO,
                 {
                     "lance": notacao(decisao.lance),
                     "origem": decisao.origem,
@@ -217,7 +272,7 @@ class Orquestrador:
         """Joga ate o fim (ou ate `max_lances`), enquanto os lados forem IAs simuladas."""
         self.iniciar()
         jogados = 0
-        while self.estado == EM_JOGO and (max_lances is None or jogados < max_lances):
+        while self._em_jogo() and (max_lances is None or jogados < max_lances):
             if await self.passo() is None:
                 break
             jogados += 1
@@ -228,22 +283,30 @@ class Orquestrador:
             self.lances.pop()
         self.pendente = None
         self._analise = None
-        self._mudar_estado(EM_JOGO)
+        self._mudar_estado(Estado.EM_JOGO)
 
     # --- Consulta ------------------------------------------------------------
 
-    def resumo_do_juiz(self) -> dict[str, ResumoLado]:
-        return resumir([(x.cor, x.rotulo, x.perda) for x in self.lances if x.rotulo])
+    def resumo_do_juiz(self) -> dict[Lado, ResumoLado]:
+        return resumir(
+            Julgamento(x.cor, x.rotulo, x.perda) for x in self.lances if x.rotulo is not None
+        )
 
-    def taxa_de_fallback(self) -> dict[str, float]:
-        taxas = {}
-        for cor in (BRANCA, PRETA):
-            consultas = [x for x in self.lances if x.cor == cor and x.origem in ("llm", "fallback")]
-            falhas = sum(1 for x in consultas if x.origem == "fallback")
+    def taxa_de_fallback(self) -> dict[Lado, float]:
+        """Fracao das consultas a LLM, por lado, que terminou em fallback do Minimax."""
+        taxas: dict[Lado, float] = {}
+        for cor in CORES:
+            consultas = [
+                x for x in self.lances if x.cor == cor and x.origem in (Origem.LLM, Origem.FALLBACK)
+            ]
+            falhas = sum(1 for x in consultas if x.origem is Origem.FALLBACK)
             taxas[NOME_COR[cor]] = falhas / len(consultas) if consultas else 0.0
         return taxas
 
     # --- Interno -------------------------------------------------------------
+
+    def _em_jogo(self) -> bool:
+        return self.estado is Estado.EM_JOGO
 
     def _aplicar(self, lance: Lance, decisao: Decisao | None) -> LanceJogado:
         analise = self._analise
@@ -254,25 +317,25 @@ class Orquestrador:
             numero=len(self.partida.historico),
             cor=cor,
             texto=registro.texto,
-            origem=decisao.origem if decisao else ORIGEM_HUMANO,
+            origem=decisao.origem if decisao else Origem.HUMANO,
             motivo=decisao.motivo if decisao else "",
-            rotulo=item.rotulo if item else "",
+            rotulo=item.rotulo if item else None,
             pontuacao=item.pontuacao if item else 0,
             perda=item.perda if item else 0,
             registro_llm=decisao.registro.para_dict() if decisao and decisao.registro else None,
         )
         self.lances.append(jogado)
         self._analise = None
-        self._emitir("lance", jogado.para_dict())
+        self._emitir(Evento.LANCE, jogado.para_dict())
         if self.partida.encerrada():
-            self._mudar_estado(ENCERRADA)
+            self._mudar_estado(Estado.ENCERRADA)
         return jogado
 
-    def _mudar_estado(self, novo: str) -> None:
-        if novo != self.estado:
+    def _mudar_estado(self, novo: Estado) -> None:
+        if novo is not self.estado:
             self.estado = novo
-            self._emitir("estado", {"estado": novo, "resultado": self.partida.resultado()})
+            self._emitir(Evento.ESTADO, {"estado": novo, "resultado": self.partida.resultado()})
 
-    def _emitir(self, tipo: str, dados: dict) -> None:
+    def _emitir(self, tipo: Evento, dados: DadosEvento) -> None:
         if self.ouvinte is not None:
             self.ouvinte(tipo, dados)
