@@ -108,7 +108,8 @@ O MediaPipe não tem detector pronto de tabuleiro nem de peças de damas. A divi
 
 - **RF-VIS-01** — Calibração: o sistema detecta os 4 cantos do tabuleiro automaticamente e permite ajuste manual tocando/arrastando os cantos na tela.
 - **RF-VIS-02** — O sistema retifica a imagem para uma vista de topo e a divide em 8×8 casas.
-- **RF-VIS-03** — A orientação (qual lado é das brancas) é definida na calibração e confirmada pelo usuário.
+- **RF-VIS-03** — A orientação (qual lado é das brancas) é definida na calibração e confirmada pelo usuário. O tabuleiro é aceito montado dos dois jeitos: com a casa escura ou com a casa clara no canto inferior esquerdo de cada jogador. No segundo caso o sistema lê o tabuleiro espelhado, sem pedir que o usuário o gire, e mostra o tabuleiro digital espelhado para coincidir com o real.
+- **RF-VIS-03a** — Enquanto os cantos são ajustados, a página desenha a grade 8×8 sobre a imagem da câmera, para o usuário ver se as linhas caem sobre as casas.
 - **RF-VIS-04** — Cada casa escura é classificada como `vazia`, `branca` ou `preta`, com um valor de confiança.
 - **RF-VIS-05** — Calibração de cor: com a posição inicial montada, o sistema aprende a aparência de casa vazia, peça branca e peça preta para aquele tabuleiro e iluminação.
 - **RF-VIS-06** — Com mão detectada sobre o tabuleiro, a leitura fica suspensa e a UI indica "aguardando".
@@ -204,6 +205,7 @@ Fatos da documentação do Gambi que fundamentam esta seção: o hub expõe API 
 - **RF-UI-03** — Indicador de saúde: fps recebido, status do hub Gambi, participantes online.
 - **RF-UI-04** — Mesma interface utilizável no navegador do PC (espectador ou modo simulado).
 - **RF-UI-05** — Idioma da interface: português (pt-BR).
+- **RF-UI-06** — Jogo pela tela, sem câmera: a página mostra um tabuleiro digital e a partida é jogada por toque, no telefone ou no PC. Tocar numa peça mostra para onde ela pode ir; só lances legais são aceitos, e a captura obrigatória é respeitada. Cada lado é um humano, o Minimax ou uma LLM do Gambi. O juiz rotula cada lance, o humano da vez pode pedir uma dica e desfazer o último lance. É o modo padrão da página enquanto a leitura pela câmera não for confiável; a câmera continua disponível em `?papel=camera`.
 
 ## 5. Requisitos não funcionais
 

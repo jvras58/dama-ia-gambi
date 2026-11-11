@@ -1,9 +1,12 @@
-"""Sessao de captura: quem esta conectado, quem e a camera e o que a visao viu.
+"""Sessao: quem esta conectado, a partida jogada pela tela e o que a visao viu.
 
 A sessao liga o laco de eventos do servidor a thread da visao. Os frames chegam pelo
 WebSocket da camera e vao para o `TrabalhadorDeVisao`; cada resultado volta para o laco
 de eventos e e difundido a todos os clientes. O estado da calibracao mora na `Visao`,
 entao um telefone que cai e reconecta continua de onde parou (RF-CAP-05).
+
+A partida jogada pela tela mora na `Mesa`. Os comandos dela valem para qualquer
+cliente que nao seja espectador; os de calibracao, so para a camera.
 """
 
 import asyncio
@@ -16,19 +19,27 @@ from fastapi import WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, ValidationError
 
 from dama.config import obter_config
+from dama.jogo.orquestrador import Analisador
+from dama.llm.cliente import ClienteGambi
 from dama.visao.pipeline import ResultadoVisao, TrabalhadorDeVisao, Visao, cantos_de, salvar_frame
+from dama.web.mesa import ErroDeJogo, Mesa
 from dama.web.protocolo import (
     LEITOR,
     Alerta,
     BemVindo,
     CalibrarCores,
     Captura,
+    ComandoDeCalibracao,
+    ComandoDeJogo,
     DefinirCantos,
+    Desfazer,
     InverterLados,
+    Jogar,
     LimparCantos,
-    MensagemDoCliente,
+    NovaPartida,
     Ola,
     Papel,
+    PedirDica,
     SalvarFrame,
     estado_da_visao,
 )
@@ -40,9 +51,19 @@ _DESCONEXAO: Final[str] = "websocket.disconnect"
 class Sessao:
     """Estado compartilhado por todas as conexoes de uma partida."""
 
-    def __init__(self, visao: Visao | None = None) -> None:
-        """Cria a sessao em torno de uma `Visao` (nova, se nenhuma for passada)."""
+    def __init__(
+        self,
+        visao: Visao | None = None,
+        analisador: Analisador | None = None,
+        cliente: ClienteGambi | None = None,
+    ) -> None:
+        """Cria a sessao em torno de uma `Visao` (nova, se nenhuma for passada).
+
+        `analisador` e `cliente` vao para a mesa de jogo; os testes passam um juiz
+        raso e o cliente do servidor Gambi falso.
+        """
         self.visao: Visao = visao or Visao()
+        self.mesa = Mesa(self._difundir_mensagem, analisador, cliente)
         self.trabalhador = TrabalhadorDeVisao(self.visao, self._ao_resultado)
         self.papeis: dict[WebSocket, Papel] = {}
         self.ultimo: ResultadoVisao | None = None
@@ -55,9 +76,10 @@ class Sessao:
         self._laco = asyncio.get_running_loop()
         self.trabalhador.iniciar()
 
-    def parar(self) -> None:
-        """Desliga a thread da visao."""
+    async def parar(self) -> None:
+        """Desliga a thread da visao e as IAs da mesa de jogo."""
         self.trabalhador.parar()
+        await self.mesa.parar()
 
     @property
     def camera(self) -> WebSocket | None:
@@ -110,9 +132,15 @@ class Sessao:
         except ValidationError:
             await self._enviar(conexao, Alerta(mensagem="Mensagem nao reconhecida."))
             return
+        papel = self.papeis.get(conexao)
         if isinstance(mensagem, Ola):
             await self._apresentar(conexao, mensagem.papel)
-        elif self.papeis.get(conexao) is not Papel.CAMERA:
+        elif isinstance(mensagem, NovaPartida | Jogar | Desfazer | PedirDica):
+            if papel is Papel.ESPECTADOR:
+                await self._enviar(conexao, Alerta(mensagem="Espectadores nao jogam."))
+            else:
+                await self._jogar(conexao, mensagem)
+        elif papel is not Papel.CAMERA:
             await self._enviar(conexao, Alerta(mensagem="So a camera pode calibrar."))
         else:
             await self._executar(conexao, mensagem)
@@ -139,6 +167,7 @@ class Sessao:
                 detector_de_mao=self.visao.sensor_de_mao is not None,
             ),
         )
+        await self._enviar(conexao, self.mesa.estado())
         if papel is not pedido:
             await self._enviar(
                 conexao, Alerta(mensagem="Ja ha uma camera ativa; voce entrou como espectador.")
@@ -146,7 +175,26 @@ class Sessao:
         if self.ultimo is not None:
             await self._enviar_resultado(conexao, self.ultimo)
 
-    async def _executar(self, conexao: WebSocket, mensagem: MensagemDoCliente) -> None:
+    async def _jogar(self, conexao: WebSocket, mensagem: ComandoDeJogo) -> None:
+        """Executa um comando do jogo pela tela; o que nao puder ser feito vira alerta."""
+        try:
+            if isinstance(mensagem, NovaPartida):
+                await self.mesa.nova(mensagem.brancas, mensagem.pretas)
+            elif isinstance(mensagem, Jogar):
+                await self.mesa.jogar(mensagem.lance)
+            elif isinstance(mensagem, Desfazer):
+                await self.mesa.desfazer()
+            else:
+                await self.mesa.pedir_dica()
+        except ErroDeJogo as erro:
+            await self._enviar(conexao, Alerta(mensagem=f"{erro}."))
+
+    async def _difundir_mensagem(self, mensagem: BaseModel) -> None:
+        """Envia uma mensagem do protocolo a todos os clientes conectados."""
+        for conexao in list(self.papeis):
+            await self._enviar(conexao, mensagem)
+
+    async def _executar(self, conexao: WebSocket, mensagem: ComandoDeCalibracao) -> None:
         """Executa um comando de calibracao vindo da camera."""
         if isinstance(mensagem, DefinirCantos):
             self.visao.definir_cantos(cantos_de(mensagem.pontos))

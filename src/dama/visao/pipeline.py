@@ -28,7 +28,7 @@ from dama.visao.classificador import (
     lado_mais_claro,
     ocupacao_inicial,
 )
-from dama.visao.localizacao import localizar_tabuleiro, orientar, reduzir, retificar
+from dama.visao.localizacao import espelhar, localizar_tabuleiro, orientar, reduzir, retificar
 from dama.visao.tipos import Cantos, Imagem, LadoDasBrancas, LeituraCasa, Ponto
 
 _EXTENSAO: Final[str] = ".jpg"
@@ -70,6 +70,8 @@ class ResultadoVisao:
     cantos_sugeridos: Cantos | None = None
     """Cantos achados automaticamente, normalizados; so vem enquanto nao ha confirmados."""
     lado_das_brancas: LadoDasBrancas | None = None
+    espelhado: bool = False
+    """Tabuleiro montado com casa clara a esquerda de cada jogador, lido espelhado."""
     leituras: tuple[LeituraCasa, ...] = ()
     """Classificacao das 32 casas, na ordem dos indices; vazia se nao houve leitura."""
     duvidosas: tuple[int, ...] = ()
@@ -126,6 +128,7 @@ class Visao:
     sensor_de_mao: SensorDeMao | None = None
     _cantos: Cantos | None = None
     _orientados: bool = False
+    _espelhado: bool = False
     _lado_das_brancas: LadoDasBrancas = LadoDasBrancas.BAIXO
     _calibrar: bool = False
     _ultima_gravacao: float = 0.0
@@ -140,12 +143,14 @@ class Visao:
         with self._cadeado:
             self._cantos = cantos
             self._orientados = False
+            self._espelhado = False
 
     def limpar_cantos(self) -> None:
         """Esquece os cantos; a visao volta a sugerir os cantos automaticos."""
         with self._cadeado:
             self._cantos = None
             self._orientados = False
+            self._espelhado = False
 
     def pedir_calibracao(self) -> None:
         """Marca o proximo frame para aprender as cores com a posicao inicial."""
@@ -190,19 +195,27 @@ class Visao:
             em_pixels = orientar(imagem, em_pixels)
             self._cantos = _normalizar(em_pixels, largura, altura)
             self._orientados = True
-        cantos = self._cantos
 
         if self.sensor_de_mao is not None and self.sensor_de_mao.ha_mao_sobre(
             imagem, em_pixels, time.monotonic()
         ):
-            return ResultadoVisao(Situacao.MAO, largura, altura, cantos=cantos)
+            return ResultadoVisao(
+                Situacao.MAO, largura, altura, cantos=self._cantos, espelhado=self._espelhado
+            )
 
         retificada = retificar(imagem, em_pixels)
+        aviso, retificada = self._calibrar_se_pedido(retificada)
+        cantos = self._cantos
         previa = codificar_previa(retificada)
-        aviso = self._calibrar_se_pedido(retificada)
         if not self.classificador.calibrado:
             return ResultadoVisao(
-                Situacao.SEM_CORES, largura, altura, cantos=cantos, aviso=aviso, previa=previa
+                Situacao.SEM_CORES,
+                largura,
+                altura,
+                cantos=cantos,
+                espelhado=self._espelhado,
+                aviso=aviso,
+                previa=previa,
             )
 
         leituras = self.classificador.classificar(retificada, self._lado_das_brancas)
@@ -213,28 +226,52 @@ class Visao:
             altura,
             cantos=cantos,
             lado_das_brancas=self._lado_das_brancas,
+            espelhado=self._espelhado,
             leituras=tuple(leituras),
             duvidosas=tuple(i for i, x in enumerate(leituras) if x.confianca < minima),
             aviso=aviso,
             previa=previa,
         )
 
-    def _calibrar_se_pedido(self, retificada: Imagem) -> str:
-        """Calibra as cores se houver pedido pendente; devolve o aviso para o usuario.
+    def _calibrar_se_pedido(self, retificada: Imagem) -> tuple[str, Imagem]:
+        """Calibra as cores se houver pedido pendente.
 
+        Devolve o aviso para o usuario e a imagem retificada que vale dali em diante.
         O lado das brancas e descoberto pela propria imagem: na posicao inicial, e o
         lado com as pecas mais claras.
+
+        Se a posicao inicial nao bate, tenta a imagem transposta. E o caso do tabuleiro
+        montado com a casa clara no canto inferior esquerdo de cada jogador: a
+        orientacao deixa as pecas nas laterais, e a transposta as leva para cima e
+        para baixo sem tirar as casas escuras do lugar. Quando ela serve, os cantos
+        passam a ser guardados em ordem invertida, o que transpoe toda retificacao
+        seguinte, e a leitura fica espelhada em relacao ao tabuleiro real.
         """
         if not self._calibrar:
-            return ""
+            return "", retificada
         self._calibrar = False
-        lado = lado_mais_claro(retificada)
-        try:
-            self.classificador.calibrar(retificada, lado, ocupacao_inicial())
-        except CalibracaoInvalida as erro:
-            return f"Calibracao recusada: {erro}."
-        self._lado_das_brancas = lado
-        return f"Cores calibradas. Brancas no lado de {lado} da imagem."
+        transposta: Imagem = cv2.transpose(retificada).astype(np.uint8)
+        erro: CalibracaoInvalida | None = None
+        for candidata in (retificada, transposta):
+            lado = lado_mais_claro(candidata)
+            try:
+                self.classificador.calibrar(candidata, lado, ocupacao_inicial())
+            except CalibracaoInvalida as falha:
+                erro = erro or falha
+                continue
+            self._lado_das_brancas = lado
+            if candidata is retificada:
+                return "Cores calibradas.", retificada
+            assert self._cantos is not None
+            self._cantos = espelhar(self._cantos)
+            self._espelhado = not self._espelhado
+            return (
+                "Cores calibradas. Tabuleiro com casa clara a esquerda de cada jogador: "
+                "a leitura e espelhada."
+                if self._espelhado
+                else "Cores calibradas."
+            ), transposta
+        return f"Calibracao recusada: {erro}.", retificada
 
     def _gravar(self, dados: bytes) -> None:
         """Com `gravar_frames` ligado, salva no maximo um frame por segundo em disco."""

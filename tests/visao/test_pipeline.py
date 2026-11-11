@@ -22,6 +22,13 @@ from dama.visao.pipeline import (
 from dama.visao.tipos import Cantos, Imagem, LadoDasBrancas
 
 TOLERANCIA = 0.01
+FIXTURES = Path(__file__).parent.parent / "fixtures" / "tabuleiro"
+LARGURA_DA_FOTO = 720
+ALTURA_DA_FOTO = 1280
+CANTOS_DAS_FOTOS: dict[str, Cantos] = {
+    "inicial_espelhada_em_fundo_vermelho.jpg": ((72, 230), (677, 258), (667, 877), (31, 850)),
+    "inicial_espelhada_em_fundo_rosa.jpg": ((80, 106), (680, 120), (670, 712), (48, 688)),
+}
 
 
 def _normalizados(cantos: Cantos = CANTOS_PADRAO) -> Cantos:
@@ -128,6 +135,55 @@ def test_calibracao_recusada_avisa_e_nao_calibra() -> None:
     assert resultado.situacao is Situacao.SEM_CORES
     assert "recusada" in resultado.aviso
     assert visao.processar(_frame(posicao_inicial())).aviso == ""
+
+
+@pytest.mark.parametrize("lado", list(LadoDasBrancas))
+def test_tabuleiro_com_casa_clara_a_esquerda_e_lido_espelhado(lado: LadoDasBrancas) -> None:
+    """Com a casa clara no canto inferior esquerdo dos jogadores, a leitura e espelhada.
+
+    A cena transposta e o espelho de uma montagem correta: as pecas ficam em cima e
+    embaixo, mas a casa do canto inferior esquerdo de quem joga e clara. A calibracao
+    aceita, avisa do espelho e le a posicao inicial; recalibrar mantem o espelho.
+    """
+    cena = como_jpeg(np.ascontiguousarray(desenhar(posicao_inicial(), lado).transpose(1, 0, 2)))
+    p = [(y / ALTURA, x / LARGURA) for x, y in CANTOS_PADRAO]
+    visao = Visao()
+    visao.definir_cantos((p[0], p[3], p[2], p[1]))
+    assert not visao.processar(cena).espelhado
+    for _ in range(2):
+        visao.pedir_calibracao()
+        resultado = visao.processar(cena)
+        assert resultado.situacao is Situacao.LEITURA, resultado.aviso
+        assert resultado.espelhado
+        assert [x.ocupacao for x in resultado.leituras] == ocupacao_inicial()
+        assert resultado.duvidosas == ()
+    visao.limpar_cantos()
+    assert not visao.processar(cena).espelhado
+
+
+def test_montagem_normal_nao_e_espelhada() -> None:
+    """Com a casa escura no canto inferior esquerdo, a leitura nao e espelhada."""
+    resultado = _calibrada().processar(_frame(posicao_inicial()))
+    assert not resultado.espelhado
+
+
+@pytest.mark.parametrize("nome", list(CANTOS_DAS_FOTOS))
+def test_fotos_reais_da_posicao_inicial_sao_lidas(nome: str) -> None:
+    """Nas fotos reais com as 24 pecas, cantos conferidos a olho bastam para calibrar.
+
+    O tabuleiro esta com a casa clara a esquerda dos jogadores nas duas fotos, e os
+    cantos sao os da area de jogo, marcados a mao sobre a foto.
+    """
+    p = [(x / LARGURA_DA_FOTO, y / ALTURA_DA_FOTO) for x, y in CANTOS_DAS_FOTOS[nome]]
+    dados = (FIXTURES / nome).read_bytes()
+    visao = Visao()
+    visao.definir_cantos((p[0], p[1], p[2], p[3]))
+    visao.pedir_calibracao()
+    resultado = visao.processar(dados)
+    assert resultado.situacao is Situacao.LEITURA, resultado.aviso
+    assert resultado.espelhado
+    assert [x.ocupacao for x in resultado.leituras] == ocupacao_inicial()
+    assert resultado.duvidosas == ()
 
 
 def test_inverter_lados_gira_a_leitura() -> None:

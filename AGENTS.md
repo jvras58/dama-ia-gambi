@@ -6,7 +6,7 @@ Instruções para agentes de código que trabalham neste repositório. Para a vi
 
 Sistema que observa um tabuleiro de damas real pela câmera de um telefone, reconstrói o jogo no PC e usa LLMs servidas por um hub Gambi para jogar ou aconselhar, com um Minimax como juiz e apoio. Regras: damas brasileiras.
 
-Estado: marcos M0 a M2 prontos (regras, Minimax, integração com o Gambi, partidas no terminal). M3 (câmera e visão) tem o código pronto, mas falta verificar com o telefone e o tabuleiro reais. Detecção de lances (M4) e acabamento (M5) estão por fazer. O andamento fica em [specs/001-dama-ia-gambi/tasks.md](specs/001-dama-ia-gambi/tasks.md).
+Estado: marcos M0 a M2 prontos (regras, Minimax, integração com o Gambi, partidas no terminal) e o jogo pela tela (M3b), que é o modo padrão da página. M3 (câmera e visão) tem o código pronto, mas a calibração falhou com o tabuleiro real e a câmera está em pausa, acessível em `?papel=camera`. Detecção de lances (M4) e acabamento (M5) estão por fazer. O andamento fica em [specs/001-dama-ia-gambi/tasks.md](specs/001-dama-ia-gambi/tasks.md).
 
 ## Comandos
 
@@ -80,7 +80,7 @@ O que continua como constante `Final` no código, por não ser ajuste: geometria
 | `src/dama/llm/` | Cliente Gambi, prompt, parser e jogador com fallback. |
 | `src/dama/jogo/` | Controladores, orquestrador da partida, persistência. |
 | `src/dama/visao/` | Localização do tabuleiro, classificação das casas, mão, pipeline. |
-| `src/dama/web/` | Servidor HTTPS, WebSocket, sessão e a página do telefone (`static/`). |
+| `src/dama/web/` | Servidor HTTPS, WebSocket, sessão, mesa do jogo pela tela (`mesa.py`) e a página (`static/`). |
 | `src/dama/cli.py` | Comandos `dama simular`, `dama checar-gambi`, `dama serve`, `dama baixar-modelo`. |
 | `tests/apoio/` | Servidor Gambi falso e gerador de fotos sintéticas do tabuleiro. |
 | `tests/fixtures/` | Fotos de referência do tabuleiro real. |
@@ -95,10 +95,11 @@ Os arquivos de `src/dama/web/static/` (HTML, CSS, JavaScript) seguem o mesmo esp
 
 ## Visão
 
-- Os testes de visão usam fotos sintéticas (`tests/apoio/cena.py`) e as duas fotos reais do tabuleiro vazio. Ainda não há foto real com peças.
+- Os testes de visão usam fotos sintéticas (`tests/apoio/cena.py`) , as duas fotos reais do tabuleiro vazio e duas fotos reais da posição inicial (colcha vermelha e colcha rosa), ambas com a casa clara à esquerda dos jogadores, lidas espelhadas. Ainda não há foto real com peças fora da posição inicial.
 - O que só dá para conferir com o telefone e o tabuleiro (câmera, toque, luz real) não deve ser marcado como pronto no `tasks.md` sem essa conferência.
 - O `mediapipe` só é importado em `visao/mao.py`, e esse módulo só é carregado pelo `dama serve` e pelo `dama baixar-modelo`: demora alguns segundos para importar.
 - O navegador embutido não aceita o certificado autoassinado. Para ver a página, suba uma cópia sem TLS: `uv run uvicorn --factory dama.web.app:criar_app --port 8010`.
+- A página não guarda regra do jogo: o servidor manda os lances legais e ela só os mostra. Regra nova entra no motor, nunca no JavaScript.
 
 ## Gambi
 

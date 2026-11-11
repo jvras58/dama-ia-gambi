@@ -1,8 +1,10 @@
 """Localizacao do tabuleiro na imagem e retificacao para uma vista de topo.
 
-O tabuleiro de referencia tem casas e moldura marrons sobre uma mesa clara: ele e a
-unica regiao colorida da cena. A localizacao automatica usa isso (mascara de croma no
-espaco Lab, envoltoria convexa, quadrilatero). Ela e so o ponto de partida: o ajuste
+O tabuleiro de referencia tem casas e moldura marrons. Sobre uma mesa sem cor, ele e a
+unica regiao colorida da cena, e a localizacao automatica usa isso (mascara de croma no
+espaco Lab). Sobre um fundo colorido, como uma toalha, o que vale e a maior mancha de
+cor diferente da do fundo, medida na borda da imagem. Nos dois casos segue-se a
+envoltoria convexa e o quadrilatero. A localizacao e so o ponto de partida: o ajuste
 manual dos cantos na tela continua sendo o caminho garantido.
 
 A envoltoria pega a moldura do tabuleiro, que continua visivel com as pecas em cima.
@@ -166,33 +168,100 @@ def _cruzar(
     return (float(a0[0] + t * da[0]), float(a0[1] + t * da[1]))
 
 
-def localizar_moldura(imagem: Imagem) -> Cantos | None:
-    """Cantos da moldura do tabuleiro, ou None se nao houver um quadrilatero colorido.
+def cor_do_fundo(lab: NDArray[np.float32]) -> NDArray[np.float32]:
+    """Cor mediana (Lab) de uma faixa em volta da imagem, onde costuma estar o fundo."""
+    altura, largura = lab.shape[:2]
+    faixa = max(1, round(min(altura, largura) * obter_config().visao_faixa_do_fundo))
+    borda = np.concatenate(
+        [
+            lab[:faixa].reshape(-1, 3),
+            lab[-faixa:].reshape(-1, 3),
+            lab[:, :faixa].reshape(-1, 3),
+            lab[:, -faixa:].reshape(-1, 3),
+        ]
+    )
+    fundo: NDArray[np.float32] = np.median(borda, axis=0).astype(np.float32)
+    return fundo
 
-    Passos:
-    1. mascara dos pixels coloridos (croma acima de `visao_croma_min`);
-    2. abertura morfologica pequena, que limpa o ruido;
-    3. descarte das manchas menores que `visao_mancha_minima`;
-    4. envoltoria convexa do que sobrou, que precisa ocupar ao menos
-       `visao_area_minima` da imagem;
-    5. quadrilatero pelos quatro maiores lados da envoltoria.
+
+def _abrir(mascara: NDArray[np.uint8], fracao: float) -> NDArray[np.uint8]:
+    """Abertura morfologica com nucleo de `fracao` da largura; apaga o que e mais fino."""
+    lado_do_nucleo = round(mascara.shape[1] * fracao)
+    if lado_do_nucleo <= 1:
+        return mascara
+    nucleo = cv2.getStructuringElement(cv2.MORPH_RECT, (lado_do_nucleo, lado_do_nucleo))
+    return cv2.morphologyEx(mascara, cv2.MORPH_OPEN, nucleo).astype(np.uint8)
+
+
+def _mascara_em_fundo_neutro(imagem: Imagem) -> NDArray[np.bool_]:
+    """Pixels do tabuleiro quando o fundo nao tem cor: tudo o que e colorido.
+
+    Abertura pequena para limpar o ruido e descarte das manchas menores que
+    `visao_mancha_minima`. A moldura marrom garante o contorno mesmo com pecas.
     """
     config = obter_config()
     area_da_imagem = imagem.shape[0] * imagem.shape[1]
-    mascara = (croma(imagem) > config.visao_croma_min).astype(np.uint8)
-    lado_do_nucleo = round(imagem.shape[1] * config.visao_abertura)
-    if lado_do_nucleo > 1:
-        nucleo = cv2.getStructuringElement(cv2.MORPH_RECT, (lado_do_nucleo, lado_do_nucleo))
-        mascara = cv2.morphologyEx(mascara, cv2.MORPH_OPEN, nucleo).astype(np.uint8)
+    mascara = _abrir(
+        (croma(imagem) > config.visao_croma_min).astype(np.uint8), config.visao_abertura
+    )
     quantas, rotulos, dados, _ = cv2.connectedComponentsWithStats(mascara, connectivity=8)
     grandes = [
         i
         for i in range(1, quantas)
         if dados[i, cv2.CC_STAT_AREA] >= config.visao_mancha_minima * area_da_imagem
     ]
-    if not grandes:
+    resultado: NDArray[np.bool_] = np.isin(rotulos, grandes)
+    return resultado
+
+
+def _mascara_em_fundo_colorido(
+    lab: NDArray[np.float32], fundo: NDArray[np.float32]
+) -> NDArray[np.bool_]:
+    """Pixels do tabuleiro quando o fundo e colorido: a maior mancha diferente do fundo.
+
+    Sobre uma toalha colorida, o croma nao separa nada. O que separa e a distancia de
+    cor ao fundo, com a luminosidade pesando menos para as sombras nao contarem. Uma
+    abertura maior apaga a estampa do tecido, e so a maior mancha e mantida.
+    """
+    config = obter_config()
+    diferenca = lab - fundo
+    diferenca[:, :, 0] *= config.visao_peso_da_luz_no_fundo
+    distancia = np.sqrt((diferenca * diferenca).sum(axis=2))
+    mascara = _abrir(
+        (distancia > config.visao_distancia_do_fundo).astype(np.uint8),
+        config.visao_abertura_no_fundo,
+    )
+    quantas, rotulos, dados, _ = cv2.connectedComponentsWithStats(mascara, connectivity=8)
+    if quantas < 2:
+        return np.zeros(mascara.shape, dtype=np.bool_)
+    maior = 1 + int(np.argmax(dados[1:, cv2.CC_STAT_AREA]))
+    resultado: NDArray[np.bool_] = rotulos == maior
+    return resultado
+
+
+def localizar_moldura(imagem: Imagem) -> Cantos | None:
+    """Cantos do contorno do tabuleiro, ou None se nao houver um quadrilatero.
+
+    Passos:
+    1. cor do fundo, medida na borda da imagem;
+    2. mascara do tabuleiro: em fundo sem cor (croma abaixo de `visao_croma_min`),
+       os pixels coloridos; em fundo colorido, a maior mancha diferente do fundo;
+    3. envoltoria convexa da mascara, que precisa ocupar ao menos
+       `visao_area_minima` da imagem;
+    4. quadrilatero pelos quatro maiores lados da envoltoria.
+    """
+    config = obter_config()
+    area_da_imagem = imagem.shape[0] * imagem.shape[1]
+    lab = cv2.cvtColor(imagem, cv2.COLOR_BGR2LAB).astype(np.float32)
+    fundo = cor_do_fundo(lab)
+    croma_do_fundo = float(np.hypot(fundo[1] - _CENTRO_DO_LAB, fundo[2] - _CENTRO_DO_LAB))
+    if croma_do_fundo > config.visao_croma_min:
+        mascara = _mascara_em_fundo_colorido(lab, fundo)
+    else:
+        mascara = _mascara_em_fundo_neutro(imagem)
+    ys, xs = np.nonzero(mascara)
+    if len(xs) == 0:
         return None
-    ys, xs = np.nonzero(np.isin(rotulos, grandes))
     envoltoria = cv2.convexHull(np.stack([xs, ys], axis=1).astype(np.int32))
     if cv2.contourArea(envoltoria) < config.visao_area_minima * area_da_imagem:
         return None
@@ -250,6 +319,16 @@ def recorte_da_casa[T: np.generic](
     y0, y1 = round(linha * passo + folga), round((linha + 1) * passo - folga)
     x0, x1 = round(coluna * passo + folga), round((coluna + 1) * passo - folga)
     return retificada[y0:y1, x0:x1]
+
+
+def espelhar(cantos: Cantos) -> Cantos:
+    """Mesmos cantos, em ordem invertida: transpoe a imagem retificada.
+
+    A transposicao troca linhas por colunas e mantem cada casa escura sobre uma casa
+    escura. Serve para ler um tabuleiro montado com a casa clara no canto inferior
+    esquerdo de cada jogador.
+    """
+    return (cantos[0], cantos[3], cantos[2], cantos[1])
 
 
 def canto_inferior_esquerdo_e_escuro(retificada: Imagem) -> bool:

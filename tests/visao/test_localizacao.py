@@ -119,6 +119,24 @@ def test_localiza_o_tabuleiro_nas_fotos_reais(
     assert _casas_no_padrao(retificada) >= minimo_no_padrao
 
 
+def test_localiza_o_tabuleiro_sobre_fundo_colorido() -> None:
+    """Na foto real sobre a colcha vermelha estampada, com as 24 pecas, os cantos saem certos.
+
+    Os cantos esperados foram conferidos olhando a foto retificada.
+    """
+    imagem = _foto("inicial_espelhada_em_fundo_vermelho.jpg")
+    achados = localizar_tabuleiro(imagem)
+    assert achados is not None
+    esperados: Cantos = ((72, 230), (677, 258), (667, 877), (31, 850))
+    assert _maior_desvio(achados, esperados) < TOLERANCIA_REAL * imagem.shape[1]
+
+
+def test_fundo_colorido_sem_tabuleiro_nao_tem_cantos() -> None:
+    """Numa imagem so com um fundo colorido, nenhum tabuleiro e encontrado."""
+    toalha = np.full((ALTURA, LARGURA, 3), (60, 70, 190), dtype=np.uint8)
+    assert localizar_tabuleiro(toalha) is None
+
+
 def test_retificar_devolve_quadrado_do_tamanho_configurado() -> None:
     """A vista de topo tem o lado definido na configuracao."""
     lado = obter_config().visao_lado_retificado

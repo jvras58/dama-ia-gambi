@@ -2,7 +2,7 @@
 
 Sistema que observa um tabuleiro de damas real pela câmera de um telefone, reconstrói o jogo no PC e usa LLMs servidas por um hub [Gambi](https://www.gambi.sh/pt-br/) para jogar ou aconselhar, com um Minimax como juiz e apoio.
 
-**Estado atual**: marcos M0 a M2 concluídos e M3 (câmera e visão) com o código pronto, faltando a verificação com o telefone e o tabuleiro reais. Já é possível jogar partidas no terminal entre LLMs (via Gambi) e o Minimax, e abrir a página da câmera no telefone para calibrar e ver o tabuleiro reconhecido. A detecção de lances pela câmera ainda não existe (M4).
+**Estado atual**: marcos M0 a M2 concluídos. A partida já pode ser jogada pela tela do telefone ou do PC, por toque, contra o Minimax ou uma LLM do Gambi, e também no terminal. A leitura do tabuleiro real pela câmera (M3) tem o código pronto, mas a calibração ainda não é confiável com o tabuleiro e a luz reais, então ficou de lado por enquanto; a detecção de lances pela câmera (M4) não existe.
 
 ## Como rodar
 
@@ -44,16 +44,22 @@ uv run dama simular --brancas llm:ID_DO_PARTICIPANTE --pretas minimax --sala COD
 
 Cada lado aceita `minimax`, `minimax:<profundidade>`, `llm:*` (qualquer participante), `llm:<id-do-participante>` ou `llm:model:<nome>`. As opções também podem vir do arquivo `.env` (veja `.env.example`). Rodar `checar-gambi` antes da partida aquece os modelos; a primeira resposta de um modelo local pode passar de um minuto.
 
-## Câmera do telefone
+## Jogar pela tela
 
 ```bash
 uv run dama serve
 ```
 
-O terminal mostra o endereço `https://<ip>:8443` e um QR code. Abra no telefone, na mesma rede Wi-Fi. O certificado é autoassinado, então o navegador avisa que a conexão não é segura: escolha "Avançado" e siga para o site. Depois:
+O terminal mostra o endereço `https://<ip>:8443` e um QR code. Abra no telefone, na mesma rede Wi-Fi, ou no navegador do PC. O certificado é autoassinado, então o navegador avisa que a conexão não é segura: escolha "Avançado" e siga para o site.
 
-1. Arraste os 4 pontos até os cantos da área de jogo e confirme.
-2. Monte a posição inicial e toque em "Calibrar cores".
+Escolha quem joga de cada lado (humano, Minimax em três níveis ou uma LLM do Gambi) e toque em "Nova partida". Toque numa peça para ver para onde ela pode ir e depois no destino; numa captura em sequência, toque em cada casa de pouso. "Dica" pede uma sugestão e "Desfazer" volta o seu último lance. Para os lados LLM é preciso subir o Gambi antes; o passo a passo está em [docs/como-subir.md](docs/como-subir.md).
+
+## Câmera do telefone (em pausa)
+
+A leitura do tabuleiro real fica em `https://<ip>:8443/?papel=camera`. Ela ainda não é confiável: a calibração falhou com o tabuleiro real em fundos e luzes diferentes. O fluxo é:
+
+1. Arraste os 4 pontos até as linhas da grade caírem sobre as casas e confirme.
+2. Monte a posição inicial e toque em "Calibrar cores". O tabuleiro pode estar com a casa escura ou com a casa clara à esquerda de cada jogador; no segundo caso a leitura é espelhada.
 3. O tabuleiro reconhecido aparece na página; casas em dúvida ficam com borda vermelha.
 
 Um segundo aparelho pode acompanhar abrindo o mesmo endereço com `?papel=espectador`.
@@ -76,6 +82,7 @@ O projeto segue desenvolvimento orientado a especificação (SDD).
 | Onde | O quê |
 |---|---|
 | [AGENTS.md](AGENTS.md) | Instruções para agentes de código: comandos, fluxo e convenções. |
+| [docs/como-subir.md](docs/como-subir.md) | Passo a passo para subir o jogo, o Gambi e o Ollama, e para atualizar o Gambi. |
 | [docs/constituicao.md](docs/constituicao.md) | Princípios que valem para todo o projeto. |
 | [docs/adr/](docs/adr/README.md) | Decisões de arquitetura e seus motivos. |
 | [specs/001-dama-ia-gambi/spec.md](specs/001-dama-ia-gambi/spec.md) | O quê e por quê: requisitos e critérios de aceitação. |

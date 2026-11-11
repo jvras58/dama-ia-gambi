@@ -9,15 +9,18 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Final, TypedDict
 
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, Request, Response, WebSocket
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import RequestResponseEndpoint
 
 from dama.visao.pipeline import Situacao
 from dama.web.sessao import Sessao
 
 PASTA_ESTATICA: Final[Path] = Path(__file__).parent / "static"
 _PAGINA: Final[str] = "index.html"
+_CABECALHO_DE_CACHE: Final[str] = "Cache-Control"
+_REVALIDAR_SEMPRE: Final[str] = "no-cache"
 
 
 class Saude(TypedDict):
@@ -46,10 +49,17 @@ def criar_app(sessao: Sessao | None = None) -> FastAPI:
         try:
             yield
         finally:
-            sessao_ativa.parar()
+            await sessao_ativa.parar()
 
     app = FastAPI(title="Dama IA Gambi", lifespan=ciclo_de_vida)
     app.state.sessao = sessao_ativa
+
+    @app.middleware("http")
+    async def sem_cache(pedido: Request, seguinte: RequestResponseEndpoint) -> Response:
+        """Manda o navegador revalidar tudo, para o telefone nunca usar uma pagina velha."""
+        resposta = await seguinte(pedido)
+        resposta.headers[_CABECALHO_DE_CACHE] = _REVALIDAR_SEMPRE
+        return resposta
 
     @app.get("/", response_class=FileResponse)
     async def pagina() -> FileResponse:

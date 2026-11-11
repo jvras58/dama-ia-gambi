@@ -19,8 +19,32 @@
   </header>
 
   <main>
-    <p id="passo" class="passo" role="status">Abrindo a câmera…</p>
     <p id="aviso" class="aviso" role="alert" hidden></p>
+
+    <section id="jogo" class="jogo" aria-labelledby="situacao">
+      <p id="situacao" class="passo" role="status">Conectando…</p>
+      <div id="tabuleiro" class="tabuleiro" role="grid" aria-label="Tabuleiro de damas"></div>
+      <p id="dica" class="dica-da-ia" hidden></p>
+      <div class="acoes">
+        <button id="pedir-dica" type="button" hidden>Dica</button>
+        <button id="desfazer" type="button" hidden>Desfazer</button>
+      </div>
+
+      <form id="nova" class="nova">
+        <label>Brancas
+          <select id="brancas" name="brancas"></select>
+        </label>
+        <label>Pretas
+          <select id="pretas" name="pretas"></select>
+        </label>
+        <button type="submit" class="principal">Nova partida</button>
+      </form>
+
+      <h2 id="titulo-lances">Lances</h2>
+      <ol id="lances" class="lances" aria-labelledby="titulo-lances"></ol>
+    </section>
+
+    <p id="passo" class="passo" role="status" hidden>Abrindo a câmera…</p>
 
     <section id="camera" class="camera" aria-label="Câmera" hidden>
       <video id="video" playsinline muted autoplay></video>
@@ -35,7 +59,7 @@
       <button id="salvar" type="button" hidden>Salvar foto</button>
     </div>
 
-    <div class="paineis">
+    <div id="paineis" class="paineis" hidden>
       <section aria-labelledby="titulo-previa">
         <h2 id="titulo-previa">Tabuleiro retificado</h2>
         <div class="previa">

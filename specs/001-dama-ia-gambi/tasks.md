@@ -144,6 +144,19 @@ Convenções:
   Pronto quando: mover uma peça atualiza o tabuleiro digital; processamento ≥ 5 fps (RNF-03).
   Situação em 2026-11-11: thread com fila de tamanho 1 e tabuleiro digital prontos; 46 ms por frame no PC. Falta ver uma peça real se mover.
 
+## M3b — Jogo pela tela (sem câmera)
+
+Decidido em 2026-11-11: a calibração pela câmera falhou em seis tentativas seguidas com o tabuleiro real (fundos e luzes diferentes). A câmera fica de lado por enquanto e a partida passa a ser jogada por toque (RF-UI-06).
+
+- [x] **T320** Mesa de jogo no servidor (`web/mesa.py`)
+  Nova partida com cada lado humano, Minimax ou LLM; lance por toque validado pelo motor; IAs jogam sozinhas; dica e desfazer.
+  Pronto quando: testes pelo WebSocket cobrem partida humano × Minimax, lance ilegal, espectador, dica e desfazer.
+- [x] **T321** Tabuleiro jogável na página
+  Tocar na peça mostra os destinos; capturas em sequência são seguidas casa a casa; lista de lances com o rótulo do juiz.
+  Pronto quando: uma partida humano × Minimax é jogada no navegador do PC.
+- [ ] **T322** Conferir no telefone
+  Pronto quando: uma partida inteira é jogada por toque no telefone, e outra contra uma LLM do Gambi.
+
 ## M4 — Detecção de jogadas
 
 - [ ] **T401 — Detecção de mão** · Dep. T302, T312

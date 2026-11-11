@@ -107,6 +107,16 @@ class Settings(BaseSettings):
     regras_limite_lances_de_dama: PositiveInt = 20
     """Empate apos este numero de lances seguidos de dama, sem captura nem lance de pedra."""
 
+    jogo_pausa_entre_lances_s: NonNegativeFloat = 0.6
+    """Pausa depois de cada lance de IA no jogo pela tela, para dar tempo de ver o lance."""
+    jogo_brancas: str = "humano"
+    """Quem joga de brancas no jogo pela tela, antes de o usuario escolher."""
+    jogo_pretas: str = "minimax:4"
+    """Quem joga de pretas no jogo pela tela, antes de o usuario escolher."""
+    jogo_profundidade_facil: PositiveInt = 2
+    """Profundidade de busca do adversario 'Minimax facil' do jogo pela tela."""
+    jogo_profundidade_media: PositiveInt = 4
+    """Profundidade de busca do adversario 'Minimax medio' do jogo pela tela."""
     simulacao_brancas: str = "llm:*"
     """Quem joga de brancas no `dama simular` quando a opcao nao e informada."""
     simulacao_pretas: str = "minimax"
@@ -130,6 +140,14 @@ class Settings(BaseSettings):
     """Fracao minima da imagem para uma mancha colorida nao ser tratada como ruido."""
     visao_abertura: NonNegativeFloat = 0.002
     """Tamanho da abertura que limpa o ruido da mascara, como fracao da largura da imagem."""
+    visao_faixa_do_fundo: PositiveFloat = 0.04
+    """Largura da faixa da borda da imagem usada para medir a cor do fundo, como fracao."""
+    visao_distancia_do_fundo: PositiveFloat = 14.0
+    """Distancia de cor (Lab) ao fundo colorido a partir da qual um pixel e do tabuleiro."""
+    visao_peso_da_luz_no_fundo: NonNegativeFloat = 0.5
+    """Peso da luminosidade na distancia ao fundo; abaixo de 1, sombras pesam menos."""
+    visao_abertura_no_fundo: NonNegativeFloat = 0.01
+    """Abertura que apaga a estampa de um fundo colorido, como fracao da largura da imagem."""
     visao_area_minima: PositiveFloat = 0.05
     """Fracao minima da imagem que o tabuleiro precisa ocupar para ser aceito."""
     visao_margem_da_moldura: NonNegativeFloat = 0.02

@@ -148,3 +148,22 @@ def criar_controlador(
             if cliente is None:
                 raise ValueError("controlador LLM precisa de um cliente Gambi")
             return ControladorLLM(cliente, descricao["modelo"], descricao.get("com_analise", False))
+
+
+def criar_lado(texto: str, cliente: ClienteGambi | None = None) -> Controlador:
+    """Controlador descrito em texto, como vem da interface.
+
+    Aceita 'humano', 'minimax', 'minimax:<profundidade>', 'llm', 'llm:*',
+    'llm:<participante>' e 'llm:model:<nome>'. Levanta `ValueError` se o texto nao e
+    nenhum desses ou se um lado LLM e pedido sem cliente Gambi.
+    """
+    nome, _, resto = texto.strip().partition(":")
+    if nome == TipoControlador.HUMANO and not resto:
+        return ControladorHumano()
+    if nome == TipoControlador.MINIMAX and (not resto or resto.isdigit()):
+        return ControladorMinimax(int(resto) if resto else None)
+    if nome == TipoControlador.LLM:
+        if cliente is None:
+            raise ValueError("lado LLM exige uma sala do Gambi (DAMA_GAMBI_SALA)")
+        return ControladorLLM(cliente, resto or obter_config().gambi_modelo_padrao)
+    raise ValueError(f"lado invalido: {texto!r}")

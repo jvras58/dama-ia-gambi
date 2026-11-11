@@ -39,10 +39,15 @@ def cliente() -> Iterator[TestClient]:
 
 
 def _entrar(ws: WebSocketTestSession, papel: Papel) -> Json:
-    """Apresenta-se com o papel pedido e devolve a resposta `bem_vindo`."""
+    """Apresenta-se com o papel pedido e devolve a resposta `bem_vindo`.
+
+    Logo depois dela vem o estado da partida jogada pela tela, que e conferido e
+    descartado aqui.
+    """
     ws.send_text(json.dumps({"tipo": "ola", "papel": papel}))
     resposta: Json = ws.receive_json()
     assert resposta["tipo"] == "bem_vindo"
+    assert ws.receive_json()["tipo"] == "partida"
     return resposta
 
 
