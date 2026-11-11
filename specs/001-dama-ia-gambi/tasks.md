@@ -98,39 +98,51 @@ Convenções:
 - [ ] **T301 — Spike: câmera do telefone via HTTPS local** · Dep. T004
   Página mínima com `getUserMedia` servida com certificado autoassinado; testar no Chrome Android e no Safari iOS, incluindo WebSocket seguro.
   Pronto quando: resultado anotado no plano (funciona com autoassinado ou precisa de `mkcert`).
-- [ ] **T302 — Spike: Hand Landmarker no mediapipe 1.x** [P] · Dep. T002
+  Situação em 2026-11-11: código pronto e testado no PC com um cliente WSS. Falta abrir no telefone e anotar se o certificado autoassinado basta.
+- [x] **T302 — Spike: Hand Landmarker no mediapipe 1.x** [P] · Dep. T002
   Script que carrega o modelo `.task` e detecta mão numa foto e num vídeo curto.
   Pronto quando: API confirmada e anotada no plano; script de download do modelo para `modelos/`.
+  Situação em 2026-11-11: `visao/mao.py` e `dama baixar-modelo` escritos com a API do mediapipe 1.2.2 (`HandLandmarker` em modo vídeo). Modelo baixado para `modelos/`: carrega em 4 s, leva 19 ms por frame e não dispara nas fotos do tabuleiro nem na cena com as 24 peças. Falta o caso positivo, com uma mão de verdade sobre o tabuleiro.
 - [ ] **T303 — TLS e inicialização do servidor** · Dep. T301
   `tls.py` (certificado com IPs locais), `dama serve` sobe uvicorn em 8443, imprime URL e QR code (RF-CAP-02/04).
   Pronto quando: a página abre no telefone.
-- [ ] **T304 — Protocolo WebSocket** · Dep. T303
+  Situação em 2026-11-11: `dama serve` sobe em HTTPS e mostra endereço e QR code; conferido no PC. Falta abrir no telefone.
+- [x] **T304 — Protocolo WebSocket** · Dep. T303
   `protocolo.py` (modelos das mensagens), `/ws` com papéis `camera`/`jogador`/`espectador`, uma câmera por partida (RF-CAP-06).
   Pronto quando: testes com cliente WebSocket de teste.
+  Situação em 2026-11-11: 13 testes em `tests/web/`.
 - [ ] **T305 — Cliente: câmera e envio de frames** · Dep. T304
   `index.html`/`app.js`: câmera traseira, JPEG a 5 fps com contrapressão, indicador de fps (RF-CAP-03, RF-UI-03).
   Pronto quando: o servidor registra ≥ 5 fps recebidos do telefone.
-- [ ] **T306 — Localização do tabuleiro** [P] · Dep. T002
+  Situação em 2026-11-11: página pronta; um cliente simulado no PC enviou a 5 fps e o servidor contou 4,7 recebidos, sem descartar nenhum. Falta medir com o telefone.
+- [x] **T306 — Localização do tabuleiro** [P] · Dep. T002
   Máscara de saturação + envoltória convexa + quadrilátero; encolhimento para a área de jogo; homografia para 640×640.
   Pronto quando: nas duas fotos de `tests/fixtures/tabuleiro/`, os cantos ficam dentro de uma tolerância dos cantos anotados à mão.
+  Situação em 2026-11-11: acerta a grade nas duas fotos reais e na cena sintética, com e sem peças.
 - [ ] **T307 — Calibração de cantos na tela** · Dep. T305, T306
   Sobreposição com os 4 cantos detectados, arrastáveis; mensagem `cantos`; visualização do tabuleiro retificado (RF-VIS-01).
   Pronto quando: ajuste manual no telefone alinha a grade com as casas.
-- [ ] **T308 — Orientação** · Dep. T306
+  Situação em 2026-11-11: cantos arrastáveis e prévia retificada com grade implementados. Falta conferir o toque no telefone.
+- [x] **T308 — Orientação** · Dep. T306
   Detectar os dois cantos escuros, restringir a 2 orientações, perguntar o lado das brancas (RF-VIS-03).
   Pronto quando: teste nas fixtures acha os cantos escuros corretos.
+  Situação em 2026-11-11: testado nas duas fotos reais.
 - [ ] **T309 — Coleta de fixtures com peças** (manual) · Dep. T305
   Modo `GRAVAR_FRAMES`; fotografar posição inicial e ~10 posições variadas, em 2 condições de luz, anotando o estado esperado em JSON.
   Pronto quando: fixtures e anotações em `tests/fixtures/`.
+  Situação em 2026-11-11: botão "Salvar foto" e modo `DAMA_GRAVAR_FRAMES` prontos. Falta fotografar o tabuleiro com as peças.
 - [ ] **T310 — Classificador de cor** · Dep. T306, T309
   Interface `Classificador`; `ClassificadorCor` com disco central, mediana, descarte de pixels estourados, características de luminância e saturação, 3 centroides, confiança por margem.
   Pronto quando: acurácia por casa ≥ 99% nas fixtures (RNF-01); número registrado.
+  Situação em 2026-11-11: classificador pronto; 100% das casas em 72 cenas sintéticas. Falta medir nas fotos reais (T309).
 - [ ] **T311 — Calibração de cor na posição inicial** · Dep. T310, T308
   Mensagem `calibrar_cores`; aprende os centroides das 12 + 12 + 8 casas; atualização lenta após cada lance aceito (RF-VIS-05).
   Pronto quando: CA-01 verificado com o tabuleiro real.
+  Situação em 2026-11-11: calibração e atualização lenta prontas; CA-01 passa na cena sintética. Falta verificar com o tabuleiro real.
 - [ ] **T312 — Pipeline em thread e tabuleiro digital ao vivo** · Dep. T311
   Thread com fila de tamanho 1; mensagem `visao`; grade do tabuleiro reconhecido na página, com casas duvidosas destacadas (RF-VIS-08, RF-UI-01).
   Pronto quando: mover uma peça atualiza o tabuleiro digital; processamento ≥ 5 fps (RNF-03).
+  Situação em 2026-11-11: thread com fila de tamanho 1 e tabuleiro digital prontos; 46 ms por frame no PC. Falta ver uma peça real se mover.
 
 ## M4 — Detecção de jogadas
 

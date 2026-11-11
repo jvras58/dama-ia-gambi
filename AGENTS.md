@@ -6,7 +6,7 @@ Instruções para agentes de código que trabalham neste repositório. Para a vi
 
 Sistema que observa um tabuleiro de damas real pela câmera de um telefone, reconstrói o jogo no PC e usa LLMs servidas por um hub Gambi para jogar ou aconselhar, com um Minimax como juiz e apoio. Regras: damas brasileiras.
 
-Estado: marcos M0 a M2 prontos (regras, Minimax, integração com o Gambi, partidas no terminal). Câmera (M3), interface web (M4) e acabamento (M5) estão por fazer. O andamento fica em [specs/001-dama-ia-gambi/tasks.md](specs/001-dama-ia-gambi/tasks.md).
+Estado: marcos M0 a M2 prontos (regras, Minimax, integração com o Gambi, partidas no terminal). M3 (câmera e visão) tem o código pronto, mas falta verificar com o telefone e o tabuleiro reais. Detecção de lances (M4) e acabamento (M5) estão por fazer. O andamento fica em [specs/001-dama-ia-gambi/tasks.md](specs/001-dama-ia-gambi/tasks.md).
 
 ## Comandos
 
@@ -79,17 +79,26 @@ O que continua como constante `Final` no código, por não ser ajuste: geometria
 | `src/dama/minimax/` | Avaliação, busca alfa-beta, análise e rótulos do juiz. |
 | `src/dama/llm/` | Cliente Gambi, prompt, parser e jogador com fallback. |
 | `src/dama/jogo/` | Controladores, orquestrador da partida, persistência. |
-| `src/dama/cli.py` | Comandos `dama simular`, `dama checar-gambi`, `dama serve`. |
-| `tests/apoio/` | Servidor Gambi falso, usado pelos testes de LLM. |
+| `src/dama/visao/` | Localização do tabuleiro, classificação das casas, mão, pipeline. |
+| `src/dama/web/` | Servidor HTTPS, WebSocket, sessão e a página do telefone (`static/`). |
+| `src/dama/cli.py` | Comandos `dama simular`, `dama checar-gambi`, `dama serve`, `dama baixar-modelo`. |
+| `tests/apoio/` | Servidor Gambi falso e gerador de fotos sintéticas do tabuleiro. |
 | `tests/fixtures/` | Fotos de referência do tabuleiro real. |
 
-`src/dama/visao/` e `src/dama/web/` ainda não existem; nascem no M3 e no M4.
+Os arquivos de `src/dama/web/static/` (HTML, CSS, JavaScript) seguem o mesmo espírito: funções com bloco JSDoc, sem comentários soltos.
 
 ## Testes
 
 - Os testes de LLM usam o servidor falso de `tests/apoio/servidor_falso.py`; nenhum teste depende de rede ou de um hub real.
 - Quando um teste de regras falhar numa posição montada à mão, confira a posição antes de mexer no motor. Até aqui, o motor estava certo em todas as vezes.
 - Testes que verificam um critério de aceitação da spec levam o código no nome (`test_ca11_...`).
+
+## Visão
+
+- Os testes de visão usam fotos sintéticas (`tests/apoio/cena.py`) e as duas fotos reais do tabuleiro vazio. Ainda não há foto real com peças.
+- O que só dá para conferir com o telefone e o tabuleiro (câmera, toque, luz real) não deve ser marcado como pronto no `tasks.md` sem essa conferência.
+- O `mediapipe` só é importado em `visao/mao.py`, e esse módulo só é carregado pelo `dama serve` e pelo `dama baixar-modelo`: demora alguns segundos para importar.
+- O navegador embutido não aceita o certificado autoassinado. Para ver a página, suba uma cópia sem TLS: `uv run uvicorn --factory dama.web.app:criar_app --port 8010`.
 
 ## Gambi
 

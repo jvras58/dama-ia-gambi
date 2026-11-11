@@ -41,6 +41,20 @@ class Settings(BaseSettings):
 
     porta: PositiveInt = 8443
     """Porta do servidor HTTPS que atende o telefone."""
+    endereco: str = "0.0.0.0"
+    """Endereco em que o servidor escuta; o padrao aceita conexoes da rede local."""
+    pasta_tls: Path = Path("dados/tls")
+    """Pasta onde ficam a chave e o certificado autoassinado."""
+    tls_validade_dias: PositiveInt = 365
+    """Validade, em dias, do certificado gerado."""
+    tls_nome: str = "dama-ia-gambi"
+    """Nome que aparece no certificado gerado."""
+    captura_fps: PositiveInt = 5
+    """Quantos frames por segundo o telefone envia."""
+    captura_largura: PositiveInt = 1280
+    """Largura maxima, em pixels, do frame enviado pelo telefone."""
+    captura_qualidade_jpeg: PositiveFloat = 0.7
+    """Qualidade JPEG (0 a 1) do frame enviado pelo telefone."""
 
     llm_timeout_s: PositiveFloat = 60.0
     """Tempo maximo de espera por uma resposta da LLM, em segundos."""
@@ -106,6 +120,42 @@ class Settings(BaseSettings):
     checagem_amostra_max: PositiveInt = 20
     """Quantos caracteres da resposta de teste o `dama checar-gambi` mostra."""
 
+    visao_largura_max: PositiveInt = 1280
+    """Largura maxima, em pixels, do frame processado; frames maiores sao reduzidos."""
+    visao_lado_retificado: PositiveInt = 640
+    """Lado, em pixels, da vista de topo do tabuleiro."""
+    visao_croma_min: PositiveFloat = 8.0
+    """Croma (Lab) a partir do qual um pixel conta como parte do tabuleiro colorido."""
+    visao_mancha_minima: PositiveFloat = 0.0003
+    """Fracao minima da imagem para uma mancha colorida nao ser tratada como ruido."""
+    visao_abertura: NonNegativeFloat = 0.002
+    """Tamanho da abertura que limpa o ruido da mascara, como fracao da largura da imagem."""
+    visao_area_minima: PositiveFloat = 0.05
+    """Fracao minima da imagem que o tabuleiro precisa ocupar para ser aceito."""
+    visao_margem_da_moldura: NonNegativeFloat = 0.02
+    """Distancia entre a moldura e a area de jogo, como fracao do lado do tabuleiro."""
+    visao_fracao_do_disco: PositiveFloat = 0.6
+    """Fracao do lado da casa coberta pela regiao central usada para classifica-la."""
+    visao_pixel_estourado: PositiveInt = 250
+    """Valor (0-255) a partir do qual um pixel e tratado como reflexo e descartado."""
+    visao_fator_de_atualizacao: NonNegativeFloat = 0.05
+    """Quanto as cores aprendidas se ajustam a cada lance aceito (0 = nunca mudam)."""
+    visao_lado_da_previa: PositiveInt = 320
+    """Lado, em pixels, da previa do tabuleiro retificado enviada ao telefone."""
+    visao_qualidade_da_previa: PositiveInt = 70
+    """Qualidade JPEG (1-100) da previa do tabuleiro retificado."""
+    mao_maximo: PositiveInt = 2
+    """Quantas maos o detector procura em cada frame."""
+    mao_confianca_min: PositiveFloat = 0.5
+    """Confianca minima para o detector aceitar uma mao."""
+    mao_margem: NonNegativeFloat = 0.1
+    """Quanto o tabuleiro e aumentado ao testar se ha uma mao sobre ele."""
+    download_timeout_s: PositiveFloat = 120.0
+    """Tempo limite, em segundos, para baixar o modelo de mao."""
+    pasta_modelos: Path = Path("modelos")
+    """Pasta onde fica o modelo de mao baixado."""
+    pasta_frames: Path = Path("dados/frames")
+    """Pasta onde os frames gravados sao salvos."""
     visao_frames_estaveis: PositiveInt = 5
     """Quantos frames iguais seguidos a visao exige antes de aceitar uma leitura."""
     visao_confianca_min: PositiveFloat = 0.6

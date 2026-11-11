@@ -71,4 +71,9 @@ dev = [
     "pytest-asyncio>=1.4.1.post1",
     "pytest-cov>=7.1.0",
     "ruff>=0.17.4",
+    "types-qrcode>=8.2.0.20260518",
 ]
+
+[[tool.mypy.overrides]]
+module = ["mediapipe", "mediapipe.*"]
+ignore_missing_imports = true

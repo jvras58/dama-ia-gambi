@@ -2,7 +2,7 @@
 
 Sistema que observa um tabuleiro de damas real pela câmera de um telefone, reconstrói o jogo no PC e usa LLMs servidas por um hub [Gambi](https://www.gambi.sh/pt-br/) para jogar ou aconselhar, com um Minimax como juiz e apoio.
 
-**Estado atual**: marcos M0 a M2 concluídos. Já é possível jogar partidas no terminal entre LLMs (via Gambi) e o Minimax. Câmera e interface web ainda não existem.
+**Estado atual**: marcos M0 a M2 concluídos e M3 (câmera e visão) com o código pronto, faltando a verificação com o telefone e o tabuleiro reais. Já é possível jogar partidas no terminal entre LLMs (via Gambi) e o Minimax, e abrir a página da câmera no telefone para calibrar e ver o tabuleiro reconhecido. A detecção de lances pela câmera ainda não existe (M4).
 
 ## Como rodar
 
@@ -43,6 +43,26 @@ uv run dama simular --brancas llm:ID_DO_PARTICIPANTE --pretas minimax --sala COD
 ```
 
 Cada lado aceita `minimax`, `minimax:<profundidade>`, `llm:*` (qualquer participante), `llm:<id-do-participante>` ou `llm:model:<nome>`. As opções também podem vir do arquivo `.env` (veja `.env.example`). Rodar `checar-gambi` antes da partida aquece os modelos; a primeira resposta de um modelo local pode passar de um minuto.
+
+## Câmera do telefone
+
+```bash
+uv run dama serve
+```
+
+O terminal mostra o endereço `https://<ip>:8443` e um QR code. Abra no telefone, na mesma rede Wi-Fi. O certificado é autoassinado, então o navegador avisa que a conexão não é segura: escolha "Avançado" e siga para o site. Depois:
+
+1. Arraste os 4 pontos até os cantos da área de jogo e confirme.
+2. Monte a posição inicial e toque em "Calibrar cores".
+3. O tabuleiro reconhecido aparece na página; casas em dúvida ficam com borda vermelha.
+
+Um segundo aparelho pode acompanhar abrindo o mesmo endereço com `?papel=espectador`.
+
+Para a leitura pausar quando houver uma mão sobre o tabuleiro, baixe o modelo de mão do MediaPipe (7,8 MB, uma vez):
+
+```bash
+uv run dama baixar-modelo
+```
 
 ## Modos de jogo
 
@@ -93,8 +113,9 @@ src/dama/
   config.py                       toda a configuração (Settings)
   cli.py
   regras/  minimax/  llm/  jogo/    prontos
-  visao/  web/                    a criar no M3 e M4
+  visao/                          localização, classificação, mão, pipeline
+  web/                            servidor HTTPS, WebSocket e a página (static/)
 tests/
-  apoio/                          servidor Gambi falso
+  apoio/                          servidor Gambi falso e fotos sintéticas do tabuleiro
   fixtures/
 ```

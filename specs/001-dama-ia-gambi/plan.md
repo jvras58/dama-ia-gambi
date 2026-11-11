@@ -159,6 +159,20 @@ A saturação separa "vazia" de "peça" e a luminância separa branca de preta, 
 
 **Falta**: foto com as 24 peças na posição inicial, do ângulo de uso, para medir a separação real e virar a fixture do CA-01. Não bloqueia M0–M2.
 
+#### O que o M3 mostrou (2026-11-11)
+
+- **Croma em vez de saturação.** O marrom-cobre do tabuleiro é pouco saturado: croma Lab entre 12 e 18, contra 1 a 4 da mesa. A máscara usa croma Lab com limiar 8 (`DAMA_VISAO_CROMA_MIN`); a saturação HSV disparava no fundo escuro da segunda foto.
+- **Moldura como referência.** Com as peças na posição inicial, as casas escuras das seis fileiras ocupadas somem da máscara, então o contorno das casas não serve. A localização usa a envoltória de tudo o que é colorido (a moldura continua visível com peças) e encolhe 2% para chegar à área de jogo.
+- **Lados por mínimos quadrados.** As bordas do tabuleiro dobrável são curvas; ajustar uma reta a todos os pontos de cada lado deu a grade certa nas duas fotos, onde o maior trecho reto de cada lado errava até 40 px.
+- **Classificação por luminosidade e croma**, com mediana da região central (60% da casa). Pixels estourados são descartados como reflexo, a menos que sejam mais da metade da região: aí a casa inteira é clara (peça branca sob luz forte). Sem essa exceção, uma peça branca estourada era lida pela borda cinza.
+- **Lado das brancas descoberto sozinho** na calibração: é o lado com as peças mais claras. O botão "Inverter lados" fica como correção.
+- **Calibração recusada** quando as 32 casas não batem com a posição inicial, em vez de aprender cores erradas.
+- **Paralaxe e deriva dos cantos** (RF-VIS-09) não foram implementadas: ficam para o M4, junto da estabilidade por N frames.
+- **Desempenho**: 46 ms por frame de 1280 px no PC (RNF-03 pede 200 ms).
+- **Hand Landmarker (T302)**: API do mediapipe 1.2.2 confirmada (`HandLandmarker.create_from_options`, modo vídeo, `detect_for_video` com carimbo de tempo crescente). O modelo carrega em cerca de 4 s, contando a importação, e custa 19 ms por frame. Não houve falso positivo nas fotos do tabuleiro vazio nem na cena sintética com as 24 peças. O caso positivo ainda não foi testado: não há imagem com mão nas fixtures.
+- **`web` fala direto com `visao`** neste marco; o orquestrador entra no M4.
+- **Não verificado**: nada disso passou pelo telefone nem por fotos com peças reais. As cenas com peças são sintéticas (`tests/apoio/cena.py`).
+
 ### 4.4 Casamento observação → lance
 
 - Para o estado atual, pré-calcula `ocupacao_resultante -> lance` para todos os lances legais (ocupação = 32 valores vazia/branca/preta, sem distinguir dama).

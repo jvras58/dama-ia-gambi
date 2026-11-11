@@ -3,6 +3,7 @@
 import asyncio
 import sys
 import time
+import urllib.request
 from datetime import datetime
 from enum import IntEnum
 from pathlib import Path
@@ -39,6 +40,7 @@ _CODIFICACAO: Final[str] = "utf-8"
 _FORMATO_DO_ARQUIVO: Final[str] = "%Y%m%d-%H%M%S"
 _SEPARADOR_DO_LADO: Final[str] = ":"
 _AJUDA_LADO: Final[str] = "minimax[:prof] ou llm:<modelo>"
+_SUFIXO_PARCIAL: Final[str] = ".parcial"
 
 
 class Saida(IntEnum):
@@ -65,16 +67,63 @@ def _nota(pontuacao: int, config: Settings) -> str:
     return f"{em_pedras(pontuacao):+.2f}"
 
 
-def _nao_implementado(marco: str) -> None:
-    """Avisa que o comando ainda nao existe e encerra com falha."""
-    typer.echo(f"Ainda nao implementado (previsto para o marco {marco}).", err=True)
-    raise typer.Exit(code=Saida.FALHA)
-
-
 @app.command()
 def serve() -> None:
-    """Sobe o servidor HTTPS para o telefone."""
-    _nao_implementado("M3")
+    """Sobe o servidor HTTPS para o telefone e mostra o endereco e o QR code.
+
+    A parte web so e importada aqui, para os outros comandos nao pagarem o tempo de
+    carregar o OpenCV e o servidor.
+    """
+    from dama.web.servidor import criar_sensor_de_mao, preparar_acesso, qr_em_texto, servir
+
+    for fluxo in (sys.stdout, sys.stderr):
+        if hasattr(fluxo, "reconfigure"):
+            fluxo.reconfigure(encoding=_CODIFICACAO, errors="replace")
+    config = obter_config()
+    acesso = preparar_acesso(config)
+    sensor_de_mao = criar_sensor_de_mao()
+
+    typer.echo("Abra no telefone, na mesma rede Wi-Fi:\n")
+    typer.echo(f"    {acesso.principal}\n")
+    typer.echo(qr_em_texto(acesso.principal))
+    for outro in acesso.enderecos[1:]:
+        typer.echo(f"Tambem em: {outro}")
+    typer.echo(
+        "\nO certificado e autoassinado: o navegador vai avisar que a conexao nao e "
+        "segura. Escolha 'Avancado' e siga para o site."
+    )
+    if sensor_de_mao is None:
+        typer.echo("Detector de mao desligado: rode `dama baixar-modelo` para baixar o modelo.")
+    typer.echo("Ctrl+C para encerrar.\n")
+    servir(config, acesso, sensor_de_mao)
+
+
+@app.command("baixar-modelo")
+def baixar_modelo() -> None:
+    """Baixa o modelo de deteccao de mao do MediaPipe (cerca de 7,8 MB) para `modelos/`."""
+    from dama.visao.mao import URL_DO_MODELO, caminho_do_modelo
+
+    destino = caminho_do_modelo()
+    if destino.is_file():
+        typer.echo(f"O modelo ja esta em {destino}.")
+        return
+    typer.echo(f"Baixando {URL_DO_MODELO}")
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    temporario = destino.with_suffix(destino.suffix + _SUFIXO_PARCIAL)
+    try:
+        with urllib.request.urlopen(URL_DO_MODELO, timeout=config_de_rede()) as resposta:
+            temporario.write_bytes(resposta.read())
+    except OSError as erro:
+        temporario.unlink(missing_ok=True)
+        typer.echo(f"FALHA ao baixar o modelo: {erro}", err=True)
+        raise typer.Exit(code=Saida.FALHA) from erro
+    temporario.replace(destino)
+    typer.echo(f"Modelo salvo em {destino} ({destino.stat().st_size / 1e6:.1f} MB).")
+
+
+def config_de_rede() -> float:
+    """Tempo limite, em segundos, para baixar arquivos."""
+    return obter_config().download_timeout_s
 
 
 def _tipo_do_lado(texto: str) -> TipoControlador | None:

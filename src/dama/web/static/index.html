@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1c1917">
+  <title>Dama IA Gambi</title>
+  <link rel="stylesheet" href="/static/estilo.css">
+</head>
+<body>
+  <header class="barra">
+    <h1>Dama IA Gambi</h1>
+    <dl class="saude">
+      <div><dt>Conexão</dt><dd id="conexao" data-estado="espera">conectando</dd></div>
+      <div><dt>Papel</dt><dd id="papel">–</dd></div>
+      <div><dt>Recebido</dt><dd id="fps">– fps</dd></div>
+      <div><dt>Visão</dt><dd id="duracao">– ms</dd></div>
+    </dl>
+  </header>
+
+  <main>
+    <p id="passo" class="passo" role="status">Abrindo a câmera…</p>
+    <p id="aviso" class="aviso" role="alert" hidden></p>
+
+    <section id="camera" class="camera" aria-label="Câmera" hidden>
+      <video id="video" playsinline muted autoplay></video>
+      <canvas id="sobreposicao" aria-label="Cantos do tabuleiro, arrastáveis"></canvas>
+    </section>
+
+    <div class="acoes">
+      <button id="confirmar" type="button" class="principal" hidden>Confirmar cantos</button>
+      <button id="refazer" type="button" hidden>Refazer cantos</button>
+      <button id="calibrar" type="button" class="principal" hidden>Calibrar cores</button>
+      <button id="inverter" type="button" hidden>Inverter lados</button>
+      <button id="salvar" type="button" hidden>Salvar foto</button>
+    </div>
+
+    <div class="paineis">
+      <section aria-labelledby="titulo-previa">
+        <h2 id="titulo-previa">Tabuleiro retificado</h2>
+        <div class="previa">
+          <img id="previa" alt="Vista de topo do tabuleiro, como a visão o enxerga">
+          <div class="grade" aria-hidden="true"></div>
+        </div>
+        <p class="dica">A grade verde deve cair sobre as bordas das casas.</p>
+      </section>
+
+      <section aria-labelledby="titulo-digital">
+        <h2 id="titulo-digital">Tabuleiro reconhecido</h2>
+        <div id="digital" class="digital" role="img" aria-label="Tabuleiro reconhecido"></div>
+        <p id="resumo" class="dica">Aguardando a calibração.</p>
+      </section>
+    </div>
+  </main>
+
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
